@@ -1,6 +1,6 @@
-import { supabase } from './supabaseClient';
+import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { getErrorMessage, isNetworkError } from '../utils/errorHandler';
-import type { Project, Task, Employee, TaskType, Subtask } from '../types';
+import type { Project, Task, Employee, TaskType, Subtask, TaskAssignee } from '../types';
 
 // Helper functions to convert between database and app formats
 const dbProjectToApp = (dbProject: any): Project => ({
@@ -51,6 +51,15 @@ const dbSubtaskToApp = (dbSubtask: any): Subtask => {
     };
 };
 
+const dbTaskAssigneeToApp = (dbAssignee: any): TaskAssignee => ({
+    id: dbAssignee.id,
+    taskId: dbAssignee.task_id,
+    employeeId: dbAssignee.employee_id,
+    employee: dbAssignee.employees ? dbEmployeeToApp(dbAssignee.employees) : undefined,
+    commission: parseFloat(dbAssignee.commission || 0),
+    createdAt: dbAssignee.created_at
+});
+
 const dbTaskToApp = (dbTask: any): Task => ({
     id: dbTask.id,
     projectId: dbTask.project_id,
@@ -71,6 +80,7 @@ const dbTaskToApp = (dbTask: any): Task => ({
     taskType: dbTask.task_type,
     assigneeId: dbTask.assignee_id,
     assignee: dbTask.employees ? dbEmployeeToApp(dbTask.employees) : undefined,
+    assignees: dbTask.task_assignees?.map(dbTaskAssigneeToApp) || [],
     priority: dbTask.priority,
     createdAt: dbTask.created_at
 });
@@ -80,6 +90,10 @@ const dbTaskToApp = (dbTask: any): Task => ({
 export const projectService = {
     // Get all projects
     async getAll(): Promise<Project[]> {
+        if (!isSupabaseConfigured()) {
+            throw new Error(getErrorMessage({ message: 'Supabase not configured' }));
+        }
+        
         const { data, error } = await supabase
             .from('projects')
             .select('*')
@@ -175,10 +189,10 @@ export const taskService = {
     // Get all tasks
     async getAll(): Promise<Task[]> {
         try {
-            // Try fetching with all relations (including employees/assignees and subtasks with sessions)
+            // Try fetching with all relations (including employees/assignees, task_assignees with commission, and subtasks with sessions)
             let { data, error } = await supabase
                 .from('tasks')
-                .select('*, work_sessions(*), employees(*), subtasks(*, subtask_work_sessions(*))')
+                .select('*, work_sessions(*), employees(*), task_assignees(*, employees(*)), subtasks(*, subtask_work_sessions(*))')
                 .order('created_at', { ascending: false });
 
             // Fallback: If relationship fails (e.g., migration not run), fetch without employees
@@ -242,7 +256,7 @@ export const taskService = {
     async getById(id: string): Promise<Task | null> {
         let { data, error } = await supabase
             .from('tasks')
-            .select('*, work_sessions(*), employees(*), subtasks(*, subtask_work_sessions(*))')
+            .select('*, work_sessions(*), employees(*), task_assignees(*, employees(*)), subtasks(*, subtask_work_sessions(*))')
             .eq('id', id)
             .single();
 
@@ -280,30 +294,49 @@ export const taskService = {
 
     // Create new task
     async create(task: Omit<Task, 'id'>): Promise<Task> {
+        // Convert empty strings to null for optional fields
+        const insertData: any = {
+            project_id: task.projectId,
+            title: task.title,
+            description: task.description && task.description.trim() ? task.description : null,
+            deadline: task.deadline,
+            is_completed: task.isCompleted || false,
+            started_at: task.startedAt || null,
+            completed_at: task.completedAt || null,
+            hours_worked: task.hoursWorked || null,
+            priority: task.priority || 'Medium',
+            task_type: task.taskType && task.taskType.trim() ? task.taskType : null,
+            assignee_id: task.assigneeId && task.assigneeId.trim() ? task.assigneeId : null
+        };
+
         const { data, error } = await supabase
             .from('tasks')
-            .insert({
-                project_id: task.projectId,
-                title: task.title,
-                description: task.description,
-                deadline: task.deadline,
-                is_completed: task.isCompleted || false,
-                started_at: task.startedAt || null,
-                completed_at: task.completedAt || null,
-                hours_worked: task.hoursWorked || null,
-                priority: task.priority,
-                task_type: task.taskType,
-                assignee_id: task.assigneeId
-            })
+            .insert(insertData)
             .select()
             .single();
 
         if (error) {
             console.error('Error creating task:', error);
+            console.error('Error details:', {
+                message: error.message,
+                details: error.details,
+                hint: error.hint,
+                code: error.code,
+                insertData
+            });
             throw error;
         }
 
-        return dbTaskToApp(data);
+        const createdTask = dbTaskToApp(data);
+
+        // Create task_assignees if provided
+        if (task.assignees && task.assignees.length > 0) {
+            await this.setTaskAssignees(createdTask.id, task.assignees);
+            // Reload task with assignees
+            return this.getById(createdTask.id) as Promise<Task>;
+        }
+
+        return createdTask;
     },
 
     // Update task
@@ -327,6 +360,13 @@ export const taskService = {
             .eq('id', id)
             .select()
             .single();
+
+        // Update task_assignees if provided
+        if (updates.assignees !== undefined) {
+            await this.setTaskAssignees(id, updates.assignees);
+            // Reload task with assignees
+            return this.getById(id) as Promise<Task>;
+        }
 
         if (error) {
             console.error('Error updating task:', error);
@@ -478,6 +518,46 @@ export const taskService = {
 
         return data?.map(dbTaskToApp) || [];
     },
+
+    // Set task assignees (replace all existing assignees)
+    async setTaskAssignees(taskId: string, assignees: Omit<TaskAssignee, 'id' | 'taskId' | 'createdAt'>[]): Promise<void> {
+        // Delete existing assignees
+        await supabase
+            .from('task_assignees')
+            .delete()
+            .eq('task_id', taskId);
+
+        // Insert new assignees
+        if (assignees.length > 0) {
+            const { error } = await supabase
+                .from('task_assignees')
+                .insert(assignees.map(a => ({
+                    task_id: taskId,
+                    employee_id: a.employeeId,
+                    commission: a.commission || 0
+                })));
+
+            if (error) {
+                console.error('Error setting task assignees:', error);
+                throw error;
+            }
+        }
+    },
+
+    // Get total commission for an employee
+    async getEmployeeTotalCommission(employeeId: string): Promise<number> {
+        const { data, error } = await supabase
+            .from('task_assignees')
+            .select('commission')
+            .eq('employee_id', employeeId);
+
+        if (error) {
+            console.error('Error fetching employee commission:', error);
+            return 0;
+        }
+
+        return data?.reduce((sum, item) => sum + parseFloat(item.commission || 0), 0) || 0;
+    },
 };
 
 // ============ REALTIME SUBSCRIPTIONS (Optional) ============
@@ -518,7 +598,16 @@ export const employeeService = {
             throw error;
         }
 
-        return data.map(dbEmployeeToApp);
+        // Load total commission for each employee
+        const employees = await Promise.all(
+            data.map(async (emp) => {
+                const employee = dbEmployeeToApp(emp);
+                employee.totalCommission = await taskService.getEmployeeTotalCommission(emp.id);
+                return employee;
+            })
+        );
+
+        return employees;
     },
 
     async create(employee: Omit<Employee, 'id'>): Promise<Employee> {

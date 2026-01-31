@@ -222,6 +222,12 @@ const EmployeeDetailModal: React.FC<{ employee: Employee; onClose: () => void }>
                                 <p className="font-semibold text-slate-700 truncate" title={employee.email}>{employee.email || '---'}</p>
                             </div>
                         </div>
+                        {employee.totalCommission !== undefined && employee.totalCommission > 0 && (
+                            <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl">
+                                <p className="text-emerald-600 text-xs mb-1 font-medium">Tổng hoa hồng</p>
+                                <p className="text-emerald-700 font-bold text-lg">{employee.totalCommission.toLocaleString('vi-VN')} VNĐ</p>
+                            </div>
+                        )}
 
                         {employee.qrCodeUrl ? (
                             <div className="flex flex-col items-center justify-center bg-slate-50 rounded-2xl p-6 border border-dashed border-slate-200">
@@ -300,6 +306,17 @@ export const EmployeeManager: React.FC = () => {
         e.department.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+    // Group employees by department
+    const groupedByDepartment = filtered.reduce((acc, emp) => {
+        const dept = emp.department || 'Khác';
+        if (!acc[dept]) acc[dept] = [];
+        acc[dept].push(emp);
+        return acc;
+    }, {} as Record<string, typeof employees>);
+
+    // Sort departments alphabetically
+    const sortedDepartments = Object.keys(groupedByDepartment).sort();
+
     return (
         <div className="space-y-8">
             {/* Header */}
@@ -328,73 +345,92 @@ export const EmployeeManager: React.FC = () => {
                 />
             </div>
 
-            {/* Grid List */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filtered.map(emp => (
-                    <div key={emp.id} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all relative group">
-                        <div className="flex items-center gap-4">
-                            {/* Left: Avatar */}
-                            <div className="w-14 h-14 rounded-full bg-slate-100 border border-slate-100 overflow-hidden flex-shrink-0 cursor-pointer" onClick={() => setViewingEmployee(emp)}>
-                                {emp.avatarUrl ? (
-                                    <img src={emp.avatarUrl} alt={emp.fullName} className="w-full h-full object-cover" />
-                                ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-slate-400">
-                                        <User size={24} />
-                                    </div>
-                                )}
+            {/* Grouped List by Department */}
+            {sortedDepartments.length > 0 ? (
+                <div className="space-y-8">
+                    {sortedDepartments.map(dept => (
+                        <div key={dept} className="space-y-4">
+                            {/* Department Header */}
+                            <div className="flex items-center gap-3">
+                                <h3 className="text-xl font-bold text-slate-900">{dept}</h3>
+                                <span className="text-sm text-slate-400">({groupedByDepartment[dept].length} người)</span>
+                                <div className="flex-1 h-px bg-slate-200"></div>
                             </div>
+                            
+                            {/* Grid List for this department */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {groupedByDepartment[dept].map(emp => (
+                                    <div key={emp.id} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all relative group">
+                                        <div className="flex items-center gap-4">
+                                            {/* Left: Avatar */}
+                                            <div className="w-14 h-14 rounded-full bg-slate-100 border border-slate-100 overflow-hidden flex-shrink-0 cursor-pointer" onClick={() => setViewingEmployee(emp)}>
+                                                {emp.avatarUrl ? (
+                                                    <img src={emp.avatarUrl} alt={emp.fullName} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-slate-400">
+                                                        <User size={24} />
+                                                    </div>
+                                                )}
+                                            </div>
 
-                            {/* Middle: Info */}
-                            <div className="flex-1 min-w-0">
-                                <h3 className="font-bold text-slate-900 text-base truncate cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => setViewingEmployee(emp)}>
-                                    {emp.fullName}
-                                </h3>
-                                <div className="flex items-center gap-2 mt-0.5">
-                                    <span className="text-xs font-medium px-2 py-0.5 rounded bg-slate-100 text-slate-600 truncate max-w-[120px]">
-                                        {emp.position}
-                                    </span>
-                                </div>
-                                <p className="text-xs text-slate-400 mt-1 truncate">{emp.email}</p>
-                            </div>
+                                            {/* Middle: Info */}
+                                            <div className="flex-1 min-w-0">
+                                                <h3 className="font-bold text-slate-900 text-base truncate cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => setViewingEmployee(emp)}>
+                                                    {emp.fullName}
+                                                </h3>
+                                                <div className="flex items-center gap-2 mt-0.5">
+                                                    <span className="text-xs font-medium px-2 py-0.5 rounded bg-slate-100 text-slate-600 truncate max-w-[120px]">
+                                                        {emp.position}
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-slate-400 mt-1 truncate">{emp.email}</p>
+                                                {emp.totalCommission !== undefined && emp.totalCommission > 0 && (
+                                                    <p className="text-xs font-semibold text-emerald-600 mt-1">
+                                                        Hoa hồng: {emp.totalCommission.toLocaleString('vi-VN')} VNĐ
+                                                    </p>
+                                                )}
+                                            </div>
 
-                            {/* Right: Action Menu */}
-                            <div className="relative">
-                                <button
-                                    onClick={(e) => handleMenuClick(e, emp.id)}
-                                    className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors"
-                                >
-                                    <MoreVertical size={20} />
-                                </button>
+                                            {/* Right: Action Menu */}
+                                            <div className="relative">
+                                                <button
+                                                    onClick={(e) => handleMenuClick(e, emp.id)}
+                                                    className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors"
+                                                >
+                                                    <MoreVertical size={20} />
+                                                </button>
 
-                                {menuOpenId === emp.id && (
-                                    <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-xl shadow-xl border border-slate-100 z-10 overflow-hidden animate-in zoom-in-95 duration-100 origin-top-right">
-                                        <button
-                                            onClick={() => setViewingEmployee(emp)}
-                                            className="w-full px-4 py-2.5 text-left text-sm text-slate-600 hover:bg-slate-50 hover:text-indigo-600 flex items-center gap-2"
-                                        >
-                                            <Eye size={14} /> Xem
-                                        </button>
-                                        <button
-                                            onClick={() => { setEditingEmployee(emp); setIsModalOpen(true); }}
-                                            className="w-full px-4 py-2.5 text-left text-sm text-slate-600 hover:bg-slate-50 hover:text-indigo-600 flex items-center gap-2"
-                                        >
-                                            <Edit size={14} /> Sửa
-                                        </button>
-                                        <button
-                                            onClick={() => handleDelete(emp.id)}
-                                            className="w-full px-4 py-2.5 text-left text-sm text-rose-600 hover:bg-rose-50 flex items-center gap-2"
-                                        >
-                                            <Trash2 size={14} /> Xóa
-                                        </button>
+                                                {menuOpenId === emp.id && (
+                                                    <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-xl shadow-xl border border-slate-100 z-10 overflow-hidden animate-in zoom-in-95 duration-100 origin-top-right">
+                                                        <button
+                                                            onClick={() => setViewingEmployee(emp)}
+                                                            className="w-full px-4 py-2.5 text-left text-sm text-slate-600 hover:bg-slate-50 hover:text-indigo-600 flex items-center gap-2"
+                                                        >
+                                                            <Eye size={14} /> Xem
+                                                        </button>
+                                                        <button
+                                                            onClick={() => { setEditingEmployee(emp); setIsModalOpen(true); }}
+                                                            className="w-full px-4 py-2.5 text-left text-sm text-slate-600 hover:bg-slate-50 hover:text-indigo-600 flex items-center gap-2"
+                                                        >
+                                                            <Edit size={14} /> Sửa
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDelete(emp.id)}
+                                                            className="w-full px-4 py-2.5 text-left text-sm text-rose-600 hover:bg-rose-50 flex items-center gap-2"
+                                                        >
+                                                            <Trash2 size={14} /> Xóa
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
-                                )}
+                                ))}
                             </div>
                         </div>
-                    </div>
-                ))}
-            </div>
-
-            {filtered.length === 0 && (
+                    ))}
+                </div>
+            ) : (
                 <div className="text-center py-12 text-slate-400">
                     Chưa có nhân sự nào phù hợp
                 </div>

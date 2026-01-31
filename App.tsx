@@ -353,7 +353,7 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onComplet
   }, [subtasks]);
 
   return (
-    <div className={`group flex items-start gap-3 p-3 rounded-xl border transition-all hover:shadow-md ${isSelected ? 'bg-indigo-50 border-indigo-300' : task.isCompleted ? 'bg-slate-50/50 border-slate-100 opacity-75' : isStarted ? 'bg-indigo-50/30 border-indigo-200' : 'bg-white border-slate-200'}`}>
+    <div className={`group flex items-start gap-2 p-2.5 rounded-lg border transition-all hover:shadow-sm ${isSelected ? 'bg-indigo-50 border-indigo-300' : task.isCompleted ? 'bg-slate-50/50 border-slate-100 opacity-75' : isStarted ? 'bg-indigo-50/30 border-indigo-200' : 'bg-white border-slate-200'}`}>
       {/* Checkbox để chọn */}
       {onSelect && (
         <input
@@ -373,32 +373,35 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onComplet
       </button>
 
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${task.priority === 'High' ? 'bg-rose-50 text-rose-600' :
-            task.priority === 'Medium' ? 'bg-amber-50 text-amber-600' : 'bg-slate-100 text-slate-600'
-            }`}>
-            {task.priority}
-          </span>
-          <span className="text-xs text-slate-400 font-medium">• {projectName}</span>
-          {/* Show total hours from subtasks if available, otherwise show task timer */}
-          {totalSubtaskHours > 0 ? (
-            <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
-              Tổng: {totalSubtaskHours.toFixed(1)}h
+        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+          <h4 className={`font-semibold text-slate-800 flex-1 min-w-0 ${task.isCompleted ? 'line-through decoration-slate-400 text-slate-400' : ''}`}>
+            <span className="truncate block">{task.title}</span>
+          </h4>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${task.priority === 'High' ? 'bg-rose-50 text-rose-600' :
+              task.priority === 'Medium' ? 'bg-amber-50 text-amber-600' : 'bg-slate-100 text-slate-600'
+              }`}>
+              {task.priority}
             </span>
-          ) : isStarted && task.startedAt ? (
-            <TaskTimer startedAt={task.startedAt} sessions={task.sessions} />
-          ) : totalWorked ? (
-            <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
-              Đã làm: {totalWorked}
-            </span>
-          ) : null}
+            {/* Show total hours from subtasks if available, otherwise show task timer */}
+            {totalSubtaskHours > 0 ? (
+              <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
+                {totalSubtaskHours.toFixed(1)}h
+              </span>
+            ) : isStarted && task.startedAt ? (
+              <TaskTimer startedAt={task.startedAt} sessions={task.sessions} />
+            ) : totalWorked ? (
+              <span className="text-xs font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                {totalWorked}
+              </span>
+            ) : null}
+          </div>
         </div>
-        <h4 className={`font-semibold text-slate-800 ${task.isCompleted ? 'line-through decoration-slate-400 text-slate-400' : ''}`}>
-          {task.title}
-        </h4>
-        <p className={`text-sm text-slate-500 mt-1 line-clamp-1 ${task.isCompleted ? 'text-slate-400' : ''}`}>
-          {task.description}
-        </p>
+        {task.description && (
+          <p className={`text-xs text-slate-500 line-clamp-1 ${task.isCompleted ? 'text-slate-400' : ''}`}>
+            {task.description}
+          </p>
+        )}
 
         {/* Subtasks Section */}
         {(subtasks.length > 0 || !task.isCompleted) && (
@@ -445,20 +448,20 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onComplet
                 : null;
 
               return (
-                <div key={subtask.id} className="flex items-center gap-3 group/subtask py-1.5 px-2 rounded-lg hover:bg-slate-50 transition-colors">
+                <div key={subtask.id} className="flex items-center gap-2 group/subtask py-1 px-1.5 rounded hover:bg-slate-50 transition-colors">
                   <button
                     onClick={() => handleToggleSubtask(subtask.id)}
-                    className={`flex-shrink-0 w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${
+                    className={`flex-shrink-0 w-3.5 h-3.5 rounded border-2 flex items-center justify-center transition-all ${
                       subtask.isCompleted 
                         ? 'bg-emerald-500 border-emerald-500 text-white' 
                         : 'border-slate-300 hover:border-indigo-500'
                     }`}
                   >
-                    {subtask.isCompleted && <CheckCircle2 size={10} />}
+                    {subtask.isCompleted && <CheckCircle2 size={8} />}
                   </button>
-                  <div className="flex-1 flex items-center gap-2 min-w-0">
+                  <div className="flex-1 flex items-center gap-1.5 min-w-0">
                     <span 
-                      className={`text-sm flex-1 ${
+                      className={`text-xs flex-1 truncate ${
                         subtask.isCompleted 
                           ? 'text-slate-400 line-through' 
                           : 'text-slate-600'
@@ -470,15 +473,15 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onComplet
                     {/* Hiển thị thời gian cạnh tên subtask */}
                     {!subtask.isCompleted && (
                       <>
-                        {/* Hiển thị "Đang làm..." khi có active session (đã start nhưng chưa pause) */}
                         {hasActiveSession && (
-                          <SubtaskActiveIndicator />
+                          <span className="text-xs font-medium text-indigo-600 bg-indigo-50 px-1 py-0.5 rounded flex items-center gap-0.5 flex-shrink-0">
+                            <Play size={8} />
+                            <span>Đang làm...</span>
+                          </span>
                         )}
-                        
-                        {/* Tổng giờ đã làm - chỉ hiển thị các sessions đã pause */}
-                        {subtaskTotalWorked && (
-                          <span className="text-xs font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full">
-                            Đã làm: {subtaskTotalWorked}
+                        {subtaskTotalWorked && !hasActiveSession && (
+                          <span className="text-xs font-medium text-slate-500 bg-slate-100 px-1 py-0.5 rounded flex-shrink-0">
+                            {subtaskTotalWorked}
                           </span>
                         )}
                       </>
@@ -487,11 +490,10 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onComplet
                   
                   {!subtask.isCompleted && (
                     <>
-                      {/* Nút Start/Pause */}
                       {hasActiveSession ? (
                         <button
                           onClick={() => handlePauseSubtask(subtask.id)}
-                          className="p-1 text-amber-600 hover:bg-amber-50 rounded transition-colors"
+                          className="p-0.5 text-amber-600 hover:bg-amber-50 rounded transition-colors opacity-0 group-hover/subtask:opacity-100"
                           title="Tạm dừng"
                         >
                           <Pause size={12} />
@@ -499,8 +501,8 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onComplet
                       ) : (
                         <button
                           onClick={() => handleStartSubtask(subtask.id)}
-                          className="p-1 text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
-                          title="Bắt đầu timer"
+                          className="p-0.5 text-indigo-600 hover:bg-indigo-50 rounded transition-colors opacity-0 group-hover/subtask:opacity-100"
+                          title="Bắt đầu"
                         >
                           <Play size={12} />
                         </button>
@@ -511,10 +513,10 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onComplet
                   {!task.isCompleted && (
                     <button
                       onClick={() => handleDeleteSubtask(subtask.id)}
-                      className="opacity-0 group-hover/subtask:opacity-100 p-1 text-slate-400 hover:text-rose-500 transition-all"
-                      title="Xóa subtask"
+                      className="opacity-0 group-hover/subtask:opacity-100 p-0.5 text-slate-400 hover:text-rose-500 transition-all"
+                      title="Xóa"
                     >
-                      <X size={14} />
+                      <X size={12} />
                     </button>
                   )}
                 </div>
@@ -567,47 +569,38 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onComplet
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-4 mt-3">
-          <div className={`flex items-center gap-1.5 text-xs font-medium ${isOverdue ? 'text-rose-600' : 'text-slate-500'}`}>
-            <Calendar size={14} />
-            Hạn: {format(parseISO(task.deadline), 'HH:mm - dd/MM/yyyy')}
-            {isOverdue && <span className="ml-1">(Trễ hạn)</span>}
+        <div className="flex flex-wrap items-center gap-2 mt-2 text-xs">
+          <span className="text-slate-400">• {projectName}</span>
+          <div className={`flex items-center gap-1 text-slate-500 ${isOverdue ? 'text-rose-600' : ''}`}>
+            <Calendar size={12} />
+            <span>{format(parseISO(task.deadline), 'dd/MM HH:mm')}</span>
+            {isOverdue && <span className="ml-1">(Trễ)</span>}
           </div>
-
           {task.assignee && (
-            <div className="flex items-center gap-1.5 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+            <div className="flex items-center gap-1 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
               {task.assignee.avatarUrl ?
-                <img src={task.assignee.avatarUrl} className="w-4 h-4 rounded-full object-cover" /> :
-                <Users size={12} className="text-indigo-600" />
+                <img src={task.assignee.avatarUrl} className="w-3 h-3 rounded-full object-cover" /> :
+                <Users size={10} className="text-indigo-600" />
               }
-              <span className="text-xs font-medium text-indigo-700 max-w-[100px] truncate">{task.assignee.fullName}</span>
-            </div>
-          )}
-
-          {task.isCompleted && task.completedAt && (
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-600">
-                <CheckCircle2 size={14} />
-                Xong: {format(parseISO(task.completedAt), 'dd/MM/yyyy')}
-              </div>
-              {task.hoursWorked && (
-                <div className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md">
-                  <Clock size={12} />
-                  {task.hoursWorked} giờ
-                </div>
-              )}
+              <span className="text-indigo-700 max-w-[80px] truncate">{task.assignee.fullName}</span>
             </div>
           )}
           {isStarted && task.startedAt && (
-            <div className="flex items-center gap-1.5 text-xs font-medium text-indigo-600">
-              <Play size={14} />
-              Bắt đầu: {format(parseISO(task.startedAt), 'HH:mm')}
-            </div>
+            <span className="text-indigo-600 flex items-center gap-1">
+              <Play size={10} />
+              {format(parseISO(task.startedAt), 'HH:mm')}
+            </span>
+          )}
+          {task.isCompleted && task.completedAt && (
+            <span className="text-emerald-600 flex items-center gap-1">
+              <CheckCircle2 size={10} />
+              {format(parseISO(task.completedAt), 'dd/MM')}
+            </span>
           )}
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5 flex-shrink-0">
         {!task.isCompleted && (
           <>
             {isStarted ? (
@@ -616,10 +609,10 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onComplet
                   e.stopPropagation();
                   onPause(task.id);
                 }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-amber-600 hover:text-white hover:bg-amber-600 border border-amber-600 transition-all rounded-lg text-sm font-medium"
+                className="flex items-center gap-1 px-2 py-1 text-amber-600 hover:text-white hover:bg-amber-600 border border-amber-600 transition-all rounded text-xs font-medium"
+                title="Tạm dừng"
               >
-                <Pause size={16} />
-                Tạm dừng
+                <Pause size={14} />
               </button>
             ) : (
               <button
@@ -627,10 +620,10 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onComplet
                   e.stopPropagation();
                   onStart(task.id);
                 }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-indigo-600 hover:text-white hover:bg-indigo-600 border border-indigo-600 transition-all rounded-lg text-sm font-medium"
+                className="flex items-center gap-1 px-2 py-1 text-indigo-600 hover:text-white hover:bg-indigo-600 border border-indigo-600 transition-all rounded text-xs font-medium"
+                title={totalWorked ? 'Tiếp tục' : 'Bắt đầu'}
               >
-                <Play size={16} />
-                {totalWorked ? 'Tiếp tục' : 'Bắt đầu'}
+                <Play size={14} />
               </button>
             )}
           </>
@@ -638,26 +631,25 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onComplet
         {!task.isCompleted && (
           <button
             onClick={() => onComplete(task.id)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-emerald-600 hover:text-white hover:bg-emerald-600 border border-emerald-600 transition-all rounded-lg text-sm font-medium"
-            title="Đánh dấu hoàn thành"
+            className="p-1.5 text-emerald-600 hover:text-white hover:bg-emerald-600 border border-emerald-600 transition-all rounded"
+            title="Hoàn thành"
           >
-            <CheckCircle size={16} />
-            Done
+            <CheckCircle size={14} />
           </button>
         )}
         <button
-          onClick={() => onDelete(task.id)}
-          className="opacity-0 group-hover:opacity-100 p-2 text-slate-400 hover:text-rose-500 transition-all rounded-lg hover:bg-rose-50"
-          title="Xóa"
-        >
-          <Trash2 size={18} />
-        </button>
-        <button
           onClick={() => onEdit(task)}
-          className="opacity-0 group-hover:opacity-100 p-2 text-slate-400 hover:text-indigo-500 transition-all rounded-lg hover:bg-indigo-50"
+          className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-indigo-500 transition-all rounded hover:bg-indigo-50"
           title="Sửa"
         >
-          <Pencil size={18} />
+          <Pencil size={14} />
+        </button>
+        <button
+          onClick={() => onDelete(task.id)}
+          className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-rose-500 transition-all rounded hover:bg-rose-50"
+          title="Xóa"
+        >
+          <X size={14} />
         </button>
       </div>
     </div>
@@ -788,7 +780,10 @@ const TaskModal: React.FC<TaskModalProps> = ({ onClose, onSubmit, projects, init
   const [deadline, setDeadline] = useState(initialData?.deadline || format(new Date(), "yyyy-MM-dd'T'HH:mm"));
   const [priority, setPriority] = useState<'Low' | 'Medium' | 'High'>(initialData?.priority || 'Medium');
   const [taskType, setTaskType] = useState(initialData?.taskType || (taskTypes.length > 0 ? taskTypes[0].name : ''));
-  const [assigneeId, setAssigneeId] = useState(initialData?.assigneeId || '');
+  const [assigneeId, setAssigneeId] = useState(initialData?.assigneeId || ''); // Legacy
+  const [assignees, setAssignees] = useState<Array<{ employeeId: string; commission: number }>>(
+    initialData?.assignees?.map(a => ({ employeeId: a.employeeId, commission: a.commission })) || []
+  );
 
   // Update default taskType if taskTypes changes and we are not editing
   useEffect(() => {
@@ -835,15 +830,72 @@ const TaskModal: React.FC<TaskModalProps> = ({ onClose, onSubmit, projects, init
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Người phụ trách</label>
-            <select
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20"
-              value={assigneeId}
-              onChange={(e) => setAssigneeId(e.target.value)}
-            >
-              <option value="">-- Chọn người phụ trách --</option>
-              {employees.map(e => <option key={e.id} value={e.id}>{e.fullName}</option>)}
-            </select>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Người phụ trách (có thể chọn nhiều)</label>
+            <div className="space-y-3">
+              {assignees.map((assignee, index) => {
+                const employee = employees.find(e => e.id === assignee.employeeId);
+                return (
+                  <div key={index} className="flex items-center gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                    <select
+                      className="flex-1 px-3 py-2 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm"
+                      value={assignee.employeeId}
+                      onChange={(e) => {
+                        const newAssignees = [...assignees];
+                        newAssignees[index].employeeId = e.target.value;
+                        setAssignees(newAssignees);
+                      }}
+                    >
+                      <option value="">-- Chọn người --</option>
+                      {(() => {
+                        const grouped = employees.reduce((acc, emp) => {
+                          const dept = emp.department || 'Khác';
+                          if (!acc[dept]) acc[dept] = [];
+                          acc[dept].push(emp);
+                          return acc;
+                        }, {} as Record<string, typeof employees>);
+                        return Object.keys(grouped).sort().map(dept => (
+                          <optgroup key={dept} label={dept}>
+                            {grouped[dept].map(e => (
+                              <option key={e.id} value={e.id}>{e.fullName}</option>
+                            ))}
+                          </optgroup>
+                        ));
+                      })()}
+                    </select>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="Hoa hồng"
+                        className="w-32 px-3 py-2 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm"
+                        value={assignee.commission || ''}
+                        onChange={(e) => {
+                          const newAssignees = [...assignees];
+                          newAssignees[index].commission = parseFloat(e.target.value) || 0;
+                          setAssignees(newAssignees);
+                        }}
+                      />
+                      <span className="text-xs text-slate-500">VNĐ</span>
+                    </div>
+                    <button
+                      onClick={() => setAssignees(assignees.filter((_, i) => i !== index))}
+                      className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+                      title="Xóa"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                );
+              })}
+              <button
+                onClick={() => setAssignees([...assignees, { employeeId: '', commission: 0 }])}
+                className="w-full py-2 text-sm text-indigo-600 hover:text-indigo-700 border border-indigo-200 hover:border-indigo-300 rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                <Plus size={16} />
+                Thêm người phụ trách
+              </button>
+            </div>
           </div>
 
           <div>
@@ -888,7 +940,19 @@ const TaskModal: React.FC<TaskModalProps> = ({ onClose, onSubmit, projects, init
           </div>
           <button
             disabled={!title || !projectId}
-            onClick={() => onSubmit({ title, description, projectId, deadline, priority, taskType, assigneeId })}
+            onClick={() => onSubmit({ 
+              title, 
+              description, 
+              projectId, 
+              deadline, 
+              priority, 
+              taskType, 
+              assigneeId,
+              assignees: assignees.filter(a => a.employeeId).map(a => ({
+                employeeId: a.employeeId,
+                commission: a.commission || 0
+              }))
+            })}
             className="w-full py-4 bg-slate-900 text-white rounded-xl font-semibold hover:bg-slate-800 transition-all disabled:opacity-50 mt-4"
           >
             {initialData ? 'Lưu thay đổi' : 'Xác nhận'}
@@ -975,8 +1039,7 @@ export default function App() {
   const [isManageTypesOpen, setIsManageTypesOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'timeline' | 'daily'>('list');
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [statusFilter, setStatusFilter] = useState<string[]>(['new', 'in_progress', 'paused']);
-  const [isStatusFilterOpen, setIsStatusFilterOpen] = useState(false);
+  const [activeStatusTab, setActiveStatusTab] = useState<'all' | 'in_progress' | 'paused' | 'new'>('in_progress');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [pendingActions, setPendingActions] = useState<Array<{ type: string; taskId: string; data: any }>>([]);
   const [showCompletedTasks, setShowCompletedTasks] = useState(false);
@@ -1192,13 +1255,28 @@ export default function App() {
     };
   }, [tasks]);
 
+  // Tự động chuyển sang tab "Đang làm" khi vào "Tất cả dự án"
+  useEffect(() => {
+    if (activeProjectId === 'all') {
+      setActiveStatusTab('in_progress');
+    }
+  }, [activeProjectId]);
+
   // Filtered Tasks - Tách thành active và completed
-  const { activeTasks, completedTasks } = useMemo(() => {
+  const { activeTasks, completedTasks, categorizedTasks } = useMemo(() => {
     let allTasks = tasks;
     
     // Filter by project
     if (activeProjectId !== 'all') {
       allTasks = allTasks.filter(t => t.projectId === activeProjectId);
+    } else {
+      // Trong view tổng quan, chỉ hiển thị các task đang diễn ra
+      allTasks = allTasks.filter(t => {
+        // Task đang diễn ra: có startedAt hoặc có session đang chạy
+        const hasActiveSession = t.sessions?.some(s => s.startedAt && !s.endedAt);
+        const hasStarted = !!t.startedAt;
+        return hasActiveSession || hasStarted;
+      });
     }
     
     // Filter by search
@@ -1213,23 +1291,53 @@ export default function App() {
     const completed = allTasks.filter(t => t.isCompleted);
     const active = allTasks.filter(t => !t.isCompleted);
 
-    // Status Filter cho active tasks
-    let filteredActive = active;
-    if (statusFilter.length > 0) {
-      filteredActive = active.filter(t => {
-        let status = 'new';
-        if (t.startedAt) status = 'in_progress';
-        else if (t.sessions && t.sessions.length > 0) status = 'paused';
+    // Phân loại active tasks theo status
+    const categorizedTasks = active.reduce((acc, t) => {
+      let status: 'in_progress' | 'paused' | 'new' = 'new';
+      const hasActiveSession = t.sessions?.some(s => s.startedAt && !s.endedAt);
+      if (t.startedAt || hasActiveSession) {
+        status = 'in_progress';
+      } else if (t.sessions && t.sessions.length > 0) {
+        status = 'paused';
+      }
+      acc[status].push(t);
+      return acc;
+    }, {
+      in_progress: [] as Task[],
+      paused: [] as Task[],
+      new: [] as Task[]
+    });
 
-        return statusFilter.includes(status);
-      });
+    // Sắp xếp từng loại theo deadline (sớm nhất trước)
+    Object.keys(categorizedTasks).forEach(key => {
+      categorizedTasks[key as keyof typeof categorizedTasks].sort((a, b) => 
+        new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
+      );
+    });
+
+    // Filter theo tab đang chọn
+    let filteredActive: Task[] = [];
+    if (activeStatusTab === 'all') {
+      // Nếu đang ở view "Tất cả dự án", chỉ hiển thị tasks đang làm
+      if (activeProjectId === 'all') {
+        filteredActive = categorizedTasks.in_progress;
+      } else {
+        // Nếu chọn project cụ thể, hiển thị tất cả active tasks
+        filteredActive = active.sort((a, b) => 
+          new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
+        );
+      }
+    } else {
+      filteredActive = categorizedTasks[activeStatusTab];
     }
 
     return {
       activeTasks: filteredActive,
-      completedTasks: completed
+      completedTasks: completed,
+      categorizedTasks,
+      allActive: active
     };
-  }, [tasks, activeProjectId, searchQuery, statusFilter]);
+  }, [tasks, activeProjectId, searchQuery, activeStatusTab]);
 
   // Filtered tasks để hiển thị (không bao gồm completed nếu chưa bật showCompletedTasks)
   const filteredTasks = useMemo(() => {
@@ -1279,7 +1387,10 @@ export default function App() {
     try {
       if (editingTask) {
         // Update existing task
-        const updatedTask = await taskService.update(editingTask.id, taskData);
+        const updatedTask = await taskService.update(editingTask.id, {
+          ...taskData,
+          assignees: taskData.assignees || []
+        });
         setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
         console.log('✅ Task updated:', updatedTask);
         setEditingTask(null);
@@ -1293,15 +1404,17 @@ export default function App() {
           priority: taskData.priority,
           taskType: taskData.taskType,
           assigneeId: taskData.assigneeId,
+          assignees: taskData.assignees || [],
           isCompleted: false
         });
         setTasks(prevTasks => [newTask, ...prevTasks]);
         console.log('✅ Task created:', newTask);
       }
       setIsTaskModalOpen(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Error saving task:', error);
-      alert('Có lỗi xảy ra khi lưu công việc. Vui lòng thử lại.');
+      const errorMessage = error?.message || error?.details || 'Có lỗi xảy ra khi lưu công việc';
+      alert(`Lỗi: ${errorMessage}\n\nVui lòng kiểm tra Console (F12) để xem chi tiết.`);
     }
   };
 
@@ -1576,6 +1689,33 @@ export default function App() {
     }
   };
 
+  // Tự động bắt đầu các công việc khi chọn subtab "Đang làm"
+  useEffect(() => {
+    if (activeStatusTab === 'in_progress' && viewMode === 'list' && categorizedTasks) {
+      // Lấy danh sách tasks trong tab "Đang làm" nhưng chưa được start
+      const tasksToStart = categorizedTasks.in_progress.filter(task => {
+        if (task.isCompleted) return false;
+        const hasActiveSession = task.sessions?.some(s => s.startedAt && !s.endedAt);
+        const hasStarted = !!task.startedAt;
+        // Chỉ start những task chưa được start (có thể đã được phân loại là in_progress nhưng chưa thực sự start)
+        return !hasStarted && !hasActiveSession;
+      });
+
+      // Tự động start các tasks chưa được start (chỉ start một lần khi tab được chọn)
+      if (tasksToStart.length > 0) {
+        console.log(`🚀 Tự động bắt đầu ${tasksToStart.length} công việc trong tab "Đang làm"`);
+        // Start từng task một cách tuần tự để tránh quá tải
+        tasksToStart.forEach((task, index) => {
+          setTimeout(() => {
+            handleStartTask(task.id).catch(error => {
+              console.error(`❌ Không thể tự động bắt đầu task ${task.id}:`, error);
+            });
+          }, index * 100); // Delay 100ms giữa mỗi task
+        });
+      }
+    }
+  }, [activeStatusTab, viewMode, categorizedTasks, handleStartTask]); // Chỉ chạy khi tab thay đổi
+
   const deleteProject = async (id: string) => {
     try {
       await projectService.delete(id);
@@ -1771,42 +1911,6 @@ export default function App() {
                 />
               </div>
 
-              {/* Status Filter Dropdown */}
-              <div className="relative z-20">
-                <button
-                  onClick={() => setIsStatusFilterOpen(!isStatusFilterOpen)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-all border ${isStatusFilterOpen || statusFilter.length < 4 ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
-                >
-                  <Filter size={16} />
-                  <span>Lọc trạng thái</span>
-                  <ChevronDown size={14} />
-                </button>
-                {isStatusFilterOpen && (
-                  <div className="absolute top-full mt-2 right-0 w-48 bg-white rounded-xl shadow-xl border border-slate-100 p-2 animate-in fade-in zoom-in-95 duration-200">
-                    {[
-                      { value: 'new', label: 'Mới tạo', color: 'bg-slate-400' },
-                      { value: 'in_progress', label: 'Đang làm', color: 'bg-emerald-500' },
-                      { value: 'paused', label: 'Tạm dừng', color: 'bg-amber-500' },
-                      { value: 'completed', label: 'Đã hoàn thành', color: 'bg-indigo-500' }
-                    ].map(opt => (
-                      <label key={opt.value} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={statusFilter.includes(opt.value)}
-                          onChange={(e) => {
-                            if (e.target.checked) setStatusFilter([...statusFilter, opt.value]);
-                            else setStatusFilter(statusFilter.filter(s => s !== opt.value));
-                          }}
-                          className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 rounded"
-                        />
-                        <div className={`w-2 h-2 rounded-full ${opt.color}`}></div>
-                        <span className="text-sm text-slate-700 font-medium">{opt.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-
               {activeProjectId !== 'all' && (
                 <button
                   onClick={() => handleAiSuggest(activeProjectId)}
@@ -1884,9 +1988,70 @@ export default function App() {
                     </button>
                   </div>
                 </div>
+                {/* Sub Tabs */}
+                {viewMode === 'list' && (
+                  <div className="flex items-center gap-2 mb-4 border-b border-slate-200">
+                    <button
+                      onClick={() => setActiveStatusTab('all')}
+                      className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                        activeStatusTab === 'all'
+                          ? 'border-indigo-600 text-indigo-600'
+                          : 'border-transparent text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      Tất cả ({(() => {
+                        if (activeProjectId === 'all') {
+                          // Trong view "Tất cả dự án", tab "Tất cả" chỉ hiển thị tasks đang làm
+                          return categorizedTasks?.in_progress?.length || 0;
+                        } else {
+                          // Trong view project cụ thể, hiển thị tất cả active tasks
+                          let allTasks = tasks.filter(t => t.projectId === activeProjectId && !t.isCompleted);
+                          if (searchQuery) {
+                            allTasks = allTasks.filter(t =>
+                              t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                              t.description.toLowerCase().includes(searchQuery.toLowerCase())
+                            );
+                          }
+                          return allTasks.length;
+                        }
+                      })()})
+                    </button>
+                    <button
+                      onClick={() => setActiveStatusTab('in_progress')}
+                      className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                        activeStatusTab === 'in_progress'
+                          ? 'border-indigo-600 text-indigo-600'
+                          : 'border-transparent text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      Đang làm ({categorizedTasks?.in_progress?.length || 0})
+                    </button>
+                    <button
+                      onClick={() => setActiveStatusTab('paused')}
+                      className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                        activeStatusTab === 'paused'
+                          ? 'border-indigo-600 text-indigo-600'
+                          : 'border-transparent text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      Tạm dừng ({categorizedTasks?.paused?.length || 0})
+                    </button>
+                    <button
+                      onClick={() => setActiveStatusTab('new')}
+                      className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                        activeStatusTab === 'new'
+                          ? 'border-indigo-600 text-indigo-600'
+                          : 'border-transparent text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      Mới ({categorizedTasks?.new?.length || 0})
+                    </button>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between mb-3">
                   <div className="text-sm text-slate-400">
-                    {activeTasks.length} công việc đang làm
+                    {activeTasks.length} công việc
                     {completedTasks.length > 0 && (
                       <span className="text-slate-300"> • {completedTasks.length} đã hoàn thành</span>
                     )}

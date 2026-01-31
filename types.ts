@@ -35,8 +35,9 @@ export interface Task {
   completedAt?: string;
   hoursWorked?: number;
   taskType?: string;
-  assigneeId?: string;
-  assignee?: Employee;
+  assigneeId?: string; // Legacy field, kept for backward compatibility
+  assignee?: Employee; // Legacy field, kept for backward compatibility
+  assignees?: TaskAssignee[]; // Nhiều người phụ trách với commission
   priority: 'Low' | 'Medium' | 'High';
   createdAt?: string;
 }
@@ -50,6 +51,16 @@ export interface Employee {
   qrCodeUrl?: string;
   email?: string;
   password?: string;
+  totalCommission?: number; // Tổng tiền hoa hồng từ tất cả tasks
+}
+
+export interface TaskAssignee {
+  id: string;
+  taskId: string;
+  employeeId: string;
+  employee?: Employee;
+  commission: number;
+  createdAt?: string;
 }
 
 export interface TaskType {
