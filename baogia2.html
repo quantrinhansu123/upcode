@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Báo Giá UPCODE - V22 (Ultimate Fix)</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary-color: #0F172A;
+            --accent-color: #F97316;
+            --bg-editor: #f8fafc;
+            --border-color: #cbd5e1;
+            
+            /* --- CẤU HÌNH KÍCH THƯỚC --- */
+            --page-padding-side: 45px; 
+            
+            /* Chiều cao hiển thị của Header (Có đường kẻ cam) */
+            --header-visible-height: 130px; 
+            
+            /* Chiều cao vùng giữ chỗ (Lớn hơn header thật để tạo khoảng cách) */
+            --header-space-height: 150px; 
+            
+            --footer-height: 60px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            background-color: #e2e8f0;
+        }
+
+        /* --- 1. PREVIEW PANE (Màn hình xem trước) --- */
+        .preview-pane {
+            flex: 1;
+            padding: 40px;
+            overflow-y: auto;
+            display: flex;
+            justify-content: center;
+            background: #525659; /* Nền xám đậm để làm nổi bật tờ giấy */
+        }
+
+        .a4-wrapper {
+            width: 210mm;
+            min-height: 297mm;
+            background: white; /* Tờ giấy màu trắng */
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5); /* Bóng đổ */
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 50px;
+        }
+
+        /* --- 2. HEADER & FOOTER --- */
+        
+        /* Header Cố Định */
+        .print-header {
+            position: absolute; /* Trong preview thì Absolute */
+            top: 0; left: 0; right: 0;
+            height: var(--header-visible-height);
+            padding: 40px var(--page-padding-side) 0; 
+            background: white;
+            z-index: 100;
+        }
+
+        .header-inner {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            padding-bottom: 15px;
+            height: 100%;
+            border-bottom: 3px solid var(--accent-color);
+        }
+
+        /* Footer Cố Định */
+        .print-footer {
+            position: absolute; /* Trong preview thì Absolute */
+            bottom: 0; left: 0; right: 0;
+            height: var(--footer-height);
+            padding: 0 var(--page-padding-side);
+            background: white;
+            z-index: 100;
+        }
+        
+        .footer-inner {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 100%;
+            border-top: 1px solid #e2e8f0;
+            font-size: 11px;
+            color: #64748b;
+        }
+
+        /* --- 3. TABLE LAYOUT (Cấu trúc in) --- */
+        .print-table { width: 100%; border-collapse: collapse; }
+        
+        /* Khoảng trống giữ chỗ: Cao hơn Header thật để tạo gap */
+        .header-space { height: var(--header-space-height); } 
+        .footer-space { height: var(--footer-height); }
+
+        .print-content-body {
+            padding: 0 var(--page-padding-side) 20px;
+            vertical-align: top;
+        }
+
+        /* --- STYLES NỘI DUNG --- */
+        /* Class giữ khối không bị cắt đôi */
+        .section-wrapper {
+            page-break-inside: avoid; 
+            break-inside: avoid;
+            margin-bottom: 15px;
+        }
+
+        .brand h1 { font-family: 'Montserrat', sans-serif; font-weight: 800; font-size: 32px; color: var(--primary-color); line-height: 1; margin: 0; letter-spacing: -1px; }
+        .brand span { color: var(--accent-color); }
+        .brand p { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #64748b; margin-top: 5px; font-weight: 600; }
+        
+        .doc-info { text-align: right; margin-bottom: 5px; }
+        .doc-info h2 { font-family: 'Montserrat', sans-serif; color: var(--primary-color); font-size: 24px; text-transform: uppercase; font-weight: 700; margin: 0 0 5px 0; }
+        .doc-info p { font-size: 12px; color: #475569; margin: 3px 0 0 0; }
+
+        .summary-bar { display: flex; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 6px; padding: 10px 15px; margin-bottom: 25px; gap: 20px; }
+        .summary-item { flex: 1; display: flex; flex-direction: column; }
+        .sum-label { font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: 600; margin-bottom: 2px; }
+        .sum-val { font-size: 12px; font-weight: 700; color: var(--primary-color); }
+
+        .section-header { font-family: 'Montserrat', sans-serif; font-size: 14px; color: var(--primary-color); border-left: 4px solid var(--accent-color); padding-left: 10px; margin: 25px 0 12px 0; text-transform: uppercase; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+        .section-header svg { fill: var(--primary-color); }
+        .thank-you-text { font-style: italic; color: #475569; font-size: 13px; margin-bottom: 20px; margin-top: 10px; }
+        .content-block { font-size: 13px; line-height: 1.6; color: #334155; white-space: pre-wrap; margin-bottom: 15px;}
+        .scope-box { font-size: 12px; color: #475569; background: #fff; padding: 0; margin-top: 5px; border-left: 2px solid #e2e8f0; padding-left: 10px; }
+        
+        .custom-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px; }
+        .custom-table th { background: var(--primary-color); color: white; padding: 10px 10px; text-align: left; font-family: 'Montserrat', sans-serif; font-weight: 600; }
+        .custom-table td { border-bottom: 1px solid #e2e8f0; padding: 10px 10px; vertical-align: top; color: #1e293b; }
+        .custom-table tbody tr:nth-child(even) { background-color: #f8fafc; }
+        .col-price-header { text-align: right !important; width: 140px; } 
+        .col-price-cell { text-align: right; font-weight: 600; }
+        .total-row { background: white !important; }
+        .total-label { text-align: right; font-weight: 700; font-size: 14px; padding-top: 15px !important; color: var(--primary-color); }
+        .total-value-cell { background: var(--accent-color); color: white; font-weight: 800; font-size: 16px; text-align: right; padding: 12px 10px !important; border-radius: 4px; }
+
+        .timeline-box { display: flex; justify-content: space-between; margin-top: 20px; position: relative; }
+        .timeline-box::before { content: ''; position: absolute; top: 12px; left: 0; right: 0; height: 2px; background: #e2e8f0; z-index: 0; }
+        .t-item { position: relative; z-index: 1; background: white; padding: 0 4px; text-align: center; flex: 1; }
+        .t-circle { width: 26px; height: 26px; background: var(--primary-color); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px; font-weight: bold; font-size: 11px; border: 2px solid white; box-shadow: 0 0 0 2px var(--accent-color); }
+        .t-title { font-weight: bold; font-size: 11px; color: var(--primary-color); margin-bottom: 2px; }
+        .t-desc { font-size: 11px; color: #64748b; line-height: 1.3; }
+
+        .payment-container { display: flex; align-items: center; gap: 20px; background-color: #f8fafc; border: 1px dashed #cbd5e1; padding: 15px; border-radius: 6px; margin-top: 10px; }
+        .qr-display { width: 120px; height: 120px; object-fit: contain; background: white; border: 1px solid #e2e8f0; padding: 4px; border-radius: 4px; flex-shrink: 0; }
+        .payment-text { flex: 1; font-size: 13px; line-height: 1.6; color: #1e293b; white-space: pre-wrap; margin-top: 0; font-weight: 600; }
+
+        .signature-section { margin-top: 40px; display: flex; justify-content: flex-end; page-break-inside: avoid; }
+        .signature-box { text-align: center; width: 260px; }
+        .sig-date { font-style: italic; font-size: 12px; color: #64748b; margin-bottom: 5px; }
+        .sig-title { font-weight: 700; font-size: 12px; text-transform: uppercase; color: var(--primary-color); margin-bottom: 70px; }
+        .sig-name { font-weight: 700; font-size: 14px; color: #1e293b; text-transform: uppercase; }
+        .sig-role { font-size: 12px; color: #64748b; margin-top: 2px; }
+
+        /* --- EDITOR PANE --- */
+        .editor-pane { width: 480px; background: white; border-left: 1px solid #cbd5e1; overflow-y: auto; display: flex; flex-direction: column; box-shadow: -5px 0 15px rgba(0,0,0,0.05); }
+        .editor-content { padding: 25px; padding-bottom: 120px; }
+        .form-group { margin-bottom: 20px; background: var(--bg-editor); padding: 15px; border-radius: 8px; border: 1px solid var(--border-color); }
+        .form-group h3 { font-size: 12px; text-transform: uppercase; color: #64748b; margin-bottom: 10px; font-weight: 700; }
+        label { display: block; font-size: 11px; font-weight: 600; margin-bottom: 4px; color: #334155; }
+        input, textarea, select { width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 4px; font-family: 'Inter', sans-serif; font-size: 13px; margin-bottom: 8px; }
+        input:focus, textarea:focus { outline: none; border-color: var(--accent-color); }
+        .btn-add { background: var(--primary-color); color: white; border: none; width: 100%; padding: 10px; border-radius: 4px; font-size: 12px; cursor: pointer; font-weight: 600; margin-top: 5px; }
+        .list-item-row { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px dashed #cbd5e1; position: relative; }
+        .btn-sm-del { position: absolute; right: 0; top: 0; background: #fee2e2; color: var(--danger); border: none; padding: 2px 6px; border-radius: 3px; font-size: 9px; cursor: pointer; font-weight: bold; }
+        .floating-actions { position: absolute; bottom: 0; right: 0; width: 480px; background: white; padding: 15px 25px; border-top: 1px solid #e2e8f0; text-align: center; display: flex; gap: 10px; flex-direction: column; }
+        .btn-print { background: var(--accent-color); color: white; border: none; padding: 12px 30px; border-radius: 6px; font-weight: bold; font-size: 14px; cursor: pointer; width: 100%; text-transform: uppercase; }
+        .data-actions { display: flex; gap: 10px; margin-bottom: 15px; }
+        .btn-data { flex: 1; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 11px; cursor: pointer; background: white; font-weight: 600; color: #475569; transition: 0.2s; }
+        .qr-phases { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 5px; }
+        .qr-radio-item { display: flex; align-items: center; font-size: 12px; cursor: pointer; }
+        .qr-radio-item input { width: auto; margin-right: 5px; margin-bottom: 0; }
+
+        /* --- PRINT CONFIG --- */
+        @media print {
+            @page { margin: 0; size: A4; }
+            body { background: white; height: auto; overflow: visible !important; }
+            
+            .editor-pane, .floating-actions { display: none !important; }
+            
+            /* Chuyển preview pane thành trang in chính */
+            .preview-pane { 
+                padding: 0 !important; margin: 0 !important; 
+                display: block !important; overflow: visible !important; 
+                background: white !important; height: auto !important; 
+            }
+            .a4-wrapper { 
+                width: 100% !important; box-shadow: none !important; margin: 0 !important; padding: 0 !important; 
+                min-height: auto !important; 
+            }
+
+            /* Header/Footer Fixed */
+            .print-header { position: fixed; top: 0; width: 100%; }
+            .print-footer { position: fixed; bottom: 0; width: 100%; }
+            
+            .print-table { width: 100%; }
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="preview-pane">
+        <div class="a4-wrapper" id="printableArea">
+            
+            <div class="print-header">
+                <div class="header-inner">
+                    <div class="brand">
+                        <h1>UP<span>CODE</span></h1>
+                        <p>Technology Solutions</p>
+                    </div>
+                    <div class="doc-info">
+                        <h2 id="view-title">BÁO GIÁ DỊCH VỤ</h2>
+                        <p>Ngày: <span id="view-date">...</span></p>
+                        <p>Khách hàng: <span id="view-client">...</span></p>
+                    </div>
+                </div>
+            </div>
+
+            <table class="print-table">
+                <thead>
+                    <tr><td><div class="header-space">&nbsp;</div></td></tr>
+                </thead>
+                
+                <tbody>
+                    <tr>
+                        <td class="print-content-body">
+                            
+                            <div class="thank-you-text" id="view-thankyou">...</div>
+
+                            <div class="summary-bar">
+                                <div class="summary-item"><span class="sum-label">Hiệu lực</span><span class="sum-val" id="view-validity">...</span></div>
+                                <div class="summary-item"><span class="sum-label">Thời gian</span><span class="sum-val" id="view-duration">...</span></div>
+                                <div class="summary-item"><span class="sum-label">Bảo hành</span><span class="sum-val" id="view-warranty">...</span></div>
+                            </div>
+
+                            <div class="section-wrapper">
+                                <div class="section-header"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/></svg> GIẢI PHÁP ĐỀ XUẤT</div>
+                                <div class="content-block" id="view-solution">...</div>
+                                <div class="scope-box">
+                                    <div style="margin-bottom: 5px;"><strong>Phạm vi:</strong> <span id="view-scope">...</span></div>
+                                    <div><strong>Không bao gồm:</strong> <span id="view-exclusion">...</span></div>
+                                </div>
+                            </div>
+
+                            <div class="section-wrapper">
+                                <div class="section-header"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/></svg> CHI TIẾT CHI PHÍ ĐẦU TƯ</div>
+                                <table class="custom-table">
+                                    <thead><tr><th style="width: 35%">Hạng mục</th><th style="width: 40%">Mô tả chi tiết</th><th class="col-price-header">Thành tiền</th></tr></thead>
+                                    <tbody id="view-pricing-body"></tbody>
+                                    <tfoot><tr class="total-row"><td colspan="2" class="total-label">TỔNG CỘNG</td><td class="total-value-cell" id="view-total">0 VNĐ</td></tr></tfoot>
+                                </table>
+                            </div>
+
+                            <div class="section-wrapper">
+                                <div class="section-header"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z"/></svg> KẾ HOẠCH TRIỂN KHAI</div>
+                                <div class="timeline-box" id="view-timeline"></div>
+                            </div>
+
+                            <div class="section-wrapper">
+                                <div class="section-header"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg> TIẾN ĐỘ THANH TOÁN</div>
+                                <table class="custom-table">
+                                    <thead><tr><th style="width: 25%">Giai đoạn</th><th style="width: 30%">Thời điểm</th><th style="width: 20%">Giá trị</th><th>Nội dung</th></tr></thead>
+                                    <tbody id="view-payment-schedule"></tbody>
+                                </table>
+                            </div>
+
+                            <div class="section-wrapper">
+                                <div class="section-header"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg> THÔNG TIN CHUYỂN KHOẢN</div>
+                                <div class="payment-container">
+                                    <img id="view-qr-img" class="qr-display" src="" alt="QR">
+                                    <div class="payment-text" id="view-payment-info"></div>
+                                </div>
+                            </div>
+
+                            <div class="signature-section">
+                                <div class="signature-box">
+                                    <div class="sig-date" id="view-sig-date">...</div>
+                                    <div class="sig-title">NGƯỜI LẬP BÁO GIÁ</div>
+                                    <div class="sig-name" id="view-sig-name">...</div>
+                                    <div class="sig-role" id="view-sig-role">...</div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+                <tfoot><tr><td><div class="footer-space">&nbsp;</div></td></tr></tfoot>
+            </table>
+
+            <div class="print-footer">
+                <div class="footer-inner">
+                    <div><strong>UPCODE TECHNOLOGY SOLUTIONS</strong></div>
+                    <div>Hotline: <span id="view-hotline">...</span> | Email: <span id="view-email">...</span></div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="editor-pane">
+        <div class="editor-content">
+            <h2 style="margin-bottom: 15px; font-family: 'Montserrat', sans-serif; color: var(--primary-color);">🛠 SOẠN BÁO GIÁ</h2>
+
+            <div class="data-actions">
+                <button class="btn-data primary" onclick="saveToLocal()">💾 Lưu nháp</button>
+                <button class="btn-data" onclick="exportJSON()">⬇ Tải file</button>
+                <button class="btn-data" onclick="document.getElementById('import-file').click()">📂 Mở file</button>
+                <input type="file" id="import-file" accept=".json" style="display: none;" onchange="importJSON(this)">
+            </div>
+            <div id="status-msg" style="font-size: 11px; color: green; margin-bottom: 20px; height: 15px;"></div>
+
+            <div class="form-group">
+                <h3>1. Thông tin chung</h3>
+                <label>Tiêu đề</label><input type="text" id="inp-title" value="BÁO GIÁ DỊCH VỤ" oninput="updateGeneral()">
+                <label>Khách hàng</label><input type="text" id="inp-client" value="Công ty ABC" oninput="updateGeneral()">
+                <label>Ngày báo giá</label><input type="date" id="inp-date" oninput="updateGeneral()">
+                <div style="display: flex; gap: 10px; margin-top: 5px;">
+                    <div style="flex:1"><label>Hotline</label><input type="text" id="inp-hotline" value="0987.654.321" oninput="updateGeneral()"></div>
+                    <div style="flex:1"><label>Email</label><input type="email" id="inp-email" value="contact@upcode.vn" oninput="updateGeneral()"></div>
+                </div>
+            </div>
+
+            <div class="form-group" style="background: #e0f2fe; border-color: #7dd3fc;">
+                <h3>2. Tóm tắt dự án</h3>
+                <div style="display: flex; gap: 10px;">
+                    <div style="flex:1"><label>Hiệu lực</label><input type="text" id="inp-validity" value="30 ngày" oninput="updateGeneral()"></div>
+                    <div style="flex:1"><label>Thời gian</label><input type="text" id="inp-duration" value="4 Tuần" oninput="updateGeneral()"></div>
+                </div>
+                <label>Bảo hành</label><input type="text" id="inp-warranty" value="12 Tháng" oninput="updateGeneral()">
+            </div>
+
+            <div class="form-group">
+                <h3>3. Giải pháp</h3>
+                <label>Lời cảm ơn</label><textarea id="inp-thankyou" rows="2" oninput="updateGeneral()">Kính gửi Quý khách hàng, UPCODE trân trọng cảm ơn sự quan tâm của quý vị.</textarea>
+                <label>Nội dung giải pháp</label><textarea id="inp-solution" rows="3" oninput="updateGeneral()">- Thiết kế hệ thống quản lý dữ liệu.</textarea>
+                <label>Phạm vi (Scope)</label><textarea id="inp-scope" rows="2" oninput="updateGeneral()">Thiết kế UI/UX, Dev Frontend/Backend.</textarea>
+                <label>Loại trừ (Exclusion)</label><textarea id="inp-exclusion" rows="1" oninput="updateGeneral()">Hosting, Domain, Content.</textarea>
+            </div>
+
+            <div class="form-group">
+                <h3>4. Bảng giá</h3>
+                <div id="editor-pricing-list"></div>
+                <button class="btn-add" onclick="addNewItem()">+ Thêm hạng mục</button>
+            </div>
+
+            <div class="form-group">
+                <h3>5. Timeline</h3>
+                <div id="editor-timeline-list"></div>
+                <button class="btn-add" onclick="addNewTimeline()">+ Thêm mốc</button>
+            </div>
+
+            <div class="form-group">
+                <h3>6. Tiến độ TT</h3>
+                <div id="editor-payment-list"></div>
+                <button class="btn-add" onclick="addNewPaymentPhase()">+ Thêm đợt TT</button>
+            </div>
+
+            <div class="form-group" style="border: 2px dashed var(--accent-color); background: #fff7ed;">
+                <h3>7. Tài khoản (Auto QR)</h3>
+                <textarea id="inp-payment-info" rows="3" oninput="updateGeneral()">Ngân hàng: VIETINBANK
+Số TK: 100001692967
+Chủ TK: UPCODE TECHNOLOGY</textarea>
+                <label style="margin-top:10px; color:var(--accent-color);">Tạo QR thanh toán cho đợt:</label>
+                <div id="qr-selector-container" class="qr-phases"></div>
+            </div>
+
+            <div class="form-group">
+                <h3>8. Người lập báo giá</h3>
+                <label>Ngày ký</label><input type="text" id="inp-sig-date" value="Hà Nội, ngày 24 tháng 01 năm 2026" oninput="updateGeneral()">
+                <label>Họ tên</label><input type="text" id="inp-sig-name" value="Nguyễn Văn A" oninput="updateGeneral()">
+                <label>Chức danh</label><input type="text" id="inp-sig-role" value="Trưởng phòng Kinh doanh" oninput="updateGeneral()">
+            </div>
+        </div>
+
+        <div class="floating-actions">
+            <button class="btn-print" onclick="window.print()">🖨 IN / LƯU PDF</button>
+        </div>
+    </div>
+
+    <script>
+        let quoteData = {
+            items: [
+                { name: 'Phân tích & Thiết kế', desc: 'Wireframe, UI/UX Design', price: 5000000 },
+                { name: 'Phát triển Web App', desc: 'Backend, Frontend, Database', price: 15000000 },
+                { name: 'Tích hợp AppSheet', desc: 'Kết nối Google Sheets, App Mobile', price: 8000000 }
+            ],
+            timeline: [
+                { phase: 'Tuần 1', work: 'Khảo sát & Chốt yêu cầu' },
+                { phase: 'Tuần 2-3', work: 'Phát triển & Kiểm thử' },
+                { phase: 'Tuần 4', work: 'Bàn giao' }
+            ],
+            paymentPhases: [
+                { phase: 'Đợt 1', timing: 'Sau ký HĐ', value: '40%', items: 'Tạm ứng' },
+                { phase: 'Đợt 2', timing: 'Sau Demo', value: '40%', items: 'Bản thử nghiệm' },
+                { phase: 'Đợt 3', timing: 'Sau nghiệm thu', value: '20%', items: 'Bàn giao Code' }
+            ]
+        };
+
+        let selectedQRPhaseIndex = 0;
+
+        function init() {
+            document.getElementById('inp-date').valueAsDate = new Date();
+            loadFromLocal(true);
+            renderAll();
+        }
+
+        function removeVietnameseTones(str) {
+            str = str.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g,"a"); 
+            str = str.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g,"e"); 
+            str = str.replace(/ì|í|ị|ỉ|ĩ/g,"i"); 
+            str = str.replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ/g,"o"); 
+            str = str.replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g,"u"); 
+            str = str.replace(/ỳ|ý|ỵ|ỷ|ỹ/g,"y"); 
+            str = str.replace(/đ/g,"d");
+            str = str.replace(/À|Á|Ạ|Ả|Ã|Â|Ầ|Ấ|Ậ|Ẩ|Ẫ|Ă|Ằ|Ắ|Ặ|Ẳ|Ẵ/g, "A");
+            str = str.replace(/È|É|Ẹ|Ẻ|Ẽ|Ê|Ề|Ế|Ệ|Ể|Ễ/g, "E");
+            str = str.replace(/Ì|Í|Ị|Ỉ|Ĩ/g, "I");
+            str = str.replace(/Ò|Ó|Ọ|Ỏ|Õ|Ô|Ồ|Ố|Ộ|Ổ|Ỗ|Ơ|Ờ|Ớ|Ợ|Ở|Ỡ/g, "O");
+            str = str.replace(/Ù|Ú|Ụ|Ủ|Ũ|Ư|Ừ|Ứ|Ự|Ử|Ữ/g, "U");
+            str = str.replace(/Ỳ|Ý|Ỵ|Ỷ|Ỹ/g, "Y");
+            str = str.replace(/Đ/g, "D");
+            return str;
+        }
+
+        function updateGeneral() {
+            const map = {
+                'inp-title': 'view-title', 'inp-client': 'view-client', 
+                'inp-hotline': 'view-hotline', 'inp-email': 'view-email',
+                'inp-validity': 'view-validity', 'inp-duration': 'view-duration', 'inp-warranty': 'view-warranty',
+                'inp-thankyou': 'view-thankyou', 'inp-solution': 'view-solution',
+                'inp-scope': 'view-scope', 'inp-exclusion': 'view-exclusion',
+                'inp-sig-date': 'view-sig-date', 'inp-sig-name': 'view-sig-name', 'inp-sig-role': 'view-sig-role'
+            };
+            for(let id in map) {
+                document.getElementById(map[id]).textContent = document.getElementById(id).value;
+            }
+            
+            const bankInfo = document.getElementById('inp-payment-info').value;
+            const clientNameRaw = document.getElementById('inp-client').value;
+            const clientNameNoTone = removeVietnameseTones(clientNameRaw).toUpperCase();
+            const phaseNum = selectedQRPhaseIndex + 1;
+            const transferContent = `${clientNameNoTone} DOT ${phaseNum}`;
+            
+            document.getElementById('view-payment-info').innerHTML = bankInfo + `<br>Nội dung: <strong>${transferContent}</strong>`;
+
+            const dVal = document.getElementById('inp-date').value;
+            if(dVal) {
+                const d = new Date(dVal);
+                document.getElementById('view-date').textContent = `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}`;
+            }
+
+            updateQR(transferContent);
+        }
+
+        function updateQR(content) {
+            const total = calculateTotal();
+            let phaseAmount = total; 
+            if(quoteData.paymentPhases[selectedQRPhaseIndex]) {
+                const percentStr = quoteData.paymentPhases[selectedQRPhaseIndex].value;
+                const percent = parseFloat(percentStr) / 100;
+                if(!isNaN(percent)) phaseAmount = total * percent;
+            }
+            const bankId = 'vietinbank';
+            const accountNo = '100001692967';
+            const info = encodeURIComponent(content);
+            document.getElementById('view-qr-img').src = `https://img.vietqr.io/image/${bankId}-${accountNo}-compact.png?amount=${phaseAmount}&addInfo=${info}`;
+        }
+
+        function calculateTotal() { let t=0; quoteData.items.forEach(i=>t+=Number(i.price)); return t; }
+
+        function renderQRSelector() {
+            const container = document.getElementById('qr-selector-container');
+            container.innerHTML = '';
+            quoteData.paymentPhases.forEach((p, idx) => {
+                const checked = idx === selectedQRPhaseIndex ? 'checked' : '';
+                container.innerHTML += `<label class="qr-radio-item"><input type="radio" name="qrphase" value="${idx}" ${checked} onclick="changeQRPhase(${idx})"> Đợt ${idx+1} (${p.value})</label>`;
+            });
+        }
+
+        function changeQRPhase(index) { selectedQRPhaseIndex = index; updateGeneral(); }
+
+        function renderPricingEditor() {
+            const container = document.getElementById('editor-pricing-list'); container.innerHTML = '';
+            quoteData.items.forEach((item, index) => {
+                const div = document.createElement('div'); div.className = 'list-item-row';
+                div.innerHTML = `<button class="btn-sm-del" onclick="deleteItem(${index})">Xóa</button>
+                    <label>Mục ${index + 1}</label><input type="text" value="${item.name}" oninput="updateItemData(${index}, 'name', this.value)" placeholder="Tên">
+                    <textarea rows="1" oninput="updateItemData(${index}, 'desc', this.value)" placeholder="Mô tả">${item.desc}</textarea>
+                    <input type="number" value="${item.price}" oninput="updateItemData(${index}, 'price', this.value)" placeholder="Giá">`;
+                container.appendChild(div);
+            });
+        }
+        function updateItemData(i, f, v) { if(f==='price') v=Number(v); quoteData.items[i][f]=v; updatePreview(); }
+        function addNewItem() { quoteData.items.push({name:'',desc:'',price:0}); renderPricingEditor(); updatePreview(); }
+        function deleteItem(i) { if(confirm('Xóa?')) { quoteData.items.splice(i,1); renderPricingEditor(); updatePreview(); } }
+
+        function renderTimelineEditor() {
+            const container = document.getElementById('editor-timeline-list'); container.innerHTML = '';
+            quoteData.timeline.forEach((t, index) => {
+                const div = document.createElement('div'); div.className = 'list-item-row';
+                div.innerHTML = `<button class="btn-sm-del" onclick="deleteTimeline(${index})">Xóa</button>
+                    <div class="row-header"><div style="flex:1"><input type="text" value="${t.phase}" oninput="updateTimelineData(${index}, 'phase', this.value)" placeholder="TG"></div></div>
+                    <input type="text" value="${t.work}" oninput="updateTimelineData(${index}, 'work', this.value)" placeholder="Công việc">`;
+                container.appendChild(div);
+            });
+        }
+        function updateTimelineData(i, f, v) { quoteData.timeline[i][f]=v; updatePreview(); }
+        function addNewTimeline() { quoteData.timeline.push({phase:'Tuần...',work:'...'}); renderTimelineEditor(); updatePreview(); }
+        function deleteTimeline(i) { quoteData.timeline.splice(i,1); renderTimelineEditor(); updatePreview(); }
+
+        function renderPaymentEditor() {
+            const container = document.getElementById('editor-payment-list'); container.innerHTML = '';
+            quoteData.paymentPhases.forEach((p, index) => {
+                const div = document.createElement('div'); div.className = 'list-item-row';
+                div.innerHTML = `<button class="btn-sm-del" onclick="deletePaymentPhase(${index})">Xóa</button>
+                    <div class="row-header">
+                        <div style="width:30%"><label>Đợt</label><input type="text" value="${p.phase}" oninput="updatePaymentPhaseData(${index}, 'phase', this.value)"></div>
+                        <div style="flex:1"><label>Giá trị</label><input type="text" value="${p.value}" oninput="updatePaymentPhaseData(${index}, 'value', this.value)"></div>
+                    </div>
+                    <label>Thời điểm</label><input type="text" value="${p.timing}" oninput="updatePaymentPhaseData(${index}, 'timing', this.value)">
+                    <label>Nội dung</label><input type="text" value="${p.items}" oninput="updatePaymentPhaseData(${index}, 'items', this.value)">`;
+                container.appendChild(div);
+            });
+        }
+        function updatePaymentPhaseData(i, f, v) { quoteData.paymentPhases[i][f]=v; updatePreview(); }
+        function addNewPaymentPhase() { quoteData.paymentPhases.push({phase:'Đợt...',timing:'...',value:'...',items:'...'}); renderPaymentEditor(); updatePreview(); }
+        function deletePaymentPhase(i) { quoteData.paymentPhases.splice(i,1); renderPaymentEditor(); updatePreview(); }
+
+        function updatePreview() {
+            const tbody = document.getElementById('view-pricing-body'); tbody.innerHTML = '';
+            let total = 0;
+            quoteData.items.forEach(item => {
+                total += Number(item.price);
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td style="font-weight:600">${item.name}</td><td style="color:#475569">${item.desc}</td><td class="col-price-cell">${new Intl.NumberFormat('vi-VN').format(item.price)}</td>`;
+                tbody.appendChild(tr);
+            });
+            document.getElementById('view-total').innerText = new Intl.NumberFormat('vi-VN').format(total) + ' VNĐ';
+            
+            renderQRSelector();
+            updateGeneral();
+
+            const tContainer = document.getElementById('view-timeline'); tContainer.innerHTML = '';
+            quoteData.timeline.forEach((t, i) => {
+                const div = document.createElement('div'); div.className = 't-item';
+                div.innerHTML = `<div class="t-circle">${i + 1}</div><div class="t-title">${t.phase}</div><div class="t-desc">${t.work}</div>`;
+                tContainer.appendChild(div);
+            });
+
+            const pBody = document.getElementById('view-payment-schedule'); pBody.innerHTML = '';
+            quoteData.paymentPhases.forEach(p => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td style="font-weight:600">${p.phase}</td><td>${p.timing}</td><td style="color:${getComputedStyle(document.documentElement).getPropertyValue('--accent-color').trim()}; font-weight:600">${p.value}</td><td>${p.items}</td>`;
+                pBody.appendChild(tr);
+            });
+        }
+
+        function getAllData() {
+            const data = { general: {}, lists: quoteData };
+            document.querySelectorAll('.editor-content input, .editor-content textarea').forEach(el => {
+                if(el.id && !el.id.includes('import')) data.general[el.id] = el.value;
+            });
+            return data;
+        }
+        function restoreData(data) {
+            if(!data) return;
+            if(data.general) {
+                for(let id in data.general) {
+                    const el = document.getElementById(id);
+                    if(el) el.value = data.general[id];
+                }
+            }
+            if(data.lists) quoteData = data.lists;
+            renderAll();
+        }
+        function renderAll() { updateGeneral(); renderPricingEditor(); renderTimelineEditor(); renderPaymentEditor(); updatePreview(); }
+        function saveToLocal() { localStorage.setItem('upcode_quote_v22', JSON.stringify(getAllData())); showStatus('Đã lưu!'); }
+        function loadFromLocal(isAuto) { const j=localStorage.getItem('upcode_quote_v22'); if(j){ restoreData(JSON.parse(j)); if(!isAuto) showStatus('Đã khôi phục!'); } }
+        function showStatus(m) { const e=document.getElementById('status-msg'); e.innerText=m; setTimeout(()=>e.innerText='',3000); }
+        function exportJSON() {
+            const s = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(getAllData()));
+            const a = document.createElement('a'); a.href = s; 
+            a.download = `BaoGia_${document.getElementById('inp-client').value.replace(/\W/g,'_')}.json`;
+            document.body.appendChild(a); a.click(); a.remove();
+        }
+        function importJSON(inp) {
+            const f = inp.files[0]; if(!f) return;
+            const r = new FileReader(); r.onload = e => { try{restoreData(JSON.parse(e.target.result)); showStatus('OK');}catch(x){alert('Lỗi');} };
+            r.readAsText(f); inp.value='';
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>

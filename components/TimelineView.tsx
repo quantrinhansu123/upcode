@@ -197,14 +197,19 @@ export const TimelineView: React.FC<TimelineViewProps> = ({ tasks, employees, pr
                             const project = projects.find(p => p.id === projectId);
                             const projectName = project ? project.name : 'Chưa phân loại';
                             const projectColor = project ? project.color : '#94a3b8';
+                            
+                            // Calculate progress for this project
+                            const totalTasks = projectTasks.length;
+                            const completedTasks = projectTasks.filter(t => t.isCompleted).length;
+                            const progressPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
                             return (
                                 <div key={projectId}>
                                     {/* Project Header */}
                                     <div className="bg-slate-50/50 px-4 py-2 border-y border-slate-200/50 sticky left-0 z-20 flex items-center gap-2 font-bold text-slate-800 text-sm">
                                         <div className="w-3 h-3 rounded-md shadow-sm" style={{ backgroundColor: projectColor }}></div>
-                                        {projectName}
                                         <span className="text-xs font-normal text-slate-400 ml-auto bg-white px-2 py-0.5 rounded-full border border-slate-100">{projectTasks.length} việc</span>
+                                        <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">{progressPercent}%</span>
                                     </div>
 
                                     {/* Tasks */}

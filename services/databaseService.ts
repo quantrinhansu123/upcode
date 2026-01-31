@@ -344,15 +344,23 @@ export const taskService = {
         const dbUpdates: any = {};
         if (updates.projectId !== undefined) dbUpdates.project_id = updates.projectId;
         if (updates.title !== undefined) dbUpdates.title = updates.title;
-        if (updates.description !== undefined) dbUpdates.description = updates.description;
+        // Convert empty strings to null for optional fields
+        if (updates.description !== undefined) {
+            dbUpdates.description = updates.description && updates.description.trim() ? updates.description : null;
+        }
         if (updates.deadline !== undefined) dbUpdates.deadline = updates.deadline;
         if (updates.isCompleted !== undefined) dbUpdates.is_completed = updates.isCompleted;
         if (updates.startedAt !== undefined) dbUpdates.started_at = updates.startedAt;
         if (updates.completedAt !== undefined) dbUpdates.completed_at = updates.completedAt;
         if (updates.hoursWorked !== undefined) dbUpdates.hours_worked = updates.hoursWorked;
         if (updates.priority !== undefined) dbUpdates.priority = updates.priority;
-        if (updates.taskType !== undefined) dbUpdates.task_type = updates.taskType;
-        if (updates.assigneeId !== undefined) dbUpdates.assignee_id = updates.assigneeId;
+        // Convert empty strings to null for optional fields
+        if (updates.taskType !== undefined) {
+            dbUpdates.task_type = updates.taskType && updates.taskType.trim() ? updates.taskType : null;
+        }
+        if (updates.assigneeId !== undefined) {
+            dbUpdates.assignee_id = updates.assigneeId && updates.assigneeId.trim() ? updates.assigneeId : null;
+        }
 
         const { data, error } = await supabase
             .from('tasks')
@@ -361,16 +369,23 @@ export const taskService = {
             .select()
             .single();
 
+        if (error) {
+            console.error('Error updating task:', error);
+            console.error('Error details:', {
+                message: error.message,
+                details: error.details,
+                hint: error.hint,
+                code: error.code,
+                dbUpdates
+            });
+            throw error;
+        }
+
         // Update task_assignees if provided
         if (updates.assignees !== undefined) {
             await this.setTaskAssignees(id, updates.assignees);
             // Reload task with assignees
             return this.getById(id) as Promise<Task>;
-        }
-
-        if (error) {
-            console.error('Error updating task:', error);
-            throw error;
         }
 
         return dbTaskToApp(data);
@@ -636,12 +651,25 @@ export const employeeService = {
     async update(id: string, updates: Partial<Employee>): Promise<Employee> {
         const dbUpdates: any = {};
         if (updates.fullName !== undefined) dbUpdates.full_name = updates.fullName;
-        if (updates.department !== undefined) dbUpdates.department = updates.department;
-        if (updates.position !== undefined) dbUpdates.position = updates.position;
-        if (updates.avatarUrl !== undefined) dbUpdates.avatar_url = updates.avatarUrl;
-        if (updates.qrCodeUrl !== undefined) dbUpdates.qr_code_url = updates.qrCodeUrl;
-        if (updates.email !== undefined) dbUpdates.email = updates.email;
-        if (updates.password !== undefined) dbUpdates.password = updates.password;
+        // Convert empty strings to null for optional fields
+        if (updates.department !== undefined) {
+            dbUpdates.department = updates.department && updates.department.trim() ? updates.department : null;
+        }
+        if (updates.position !== undefined) {
+            dbUpdates.position = updates.position && updates.position.trim() ? updates.position : null;
+        }
+        if (updates.avatarUrl !== undefined) {
+            dbUpdates.avatar_url = updates.avatarUrl && updates.avatarUrl.trim() ? updates.avatarUrl : null;
+        }
+        if (updates.qrCodeUrl !== undefined) {
+            dbUpdates.qr_code_url = updates.qrCodeUrl && updates.qrCodeUrl.trim() ? updates.qrCodeUrl : null;
+        }
+        if (updates.email !== undefined) {
+            dbUpdates.email = updates.email && updates.email.trim() ? updates.email : null;
+        }
+        if (updates.password !== undefined) {
+            dbUpdates.password = updates.password && updates.password.trim() ? updates.password : null;
+        }
 
         const { data, error } = await supabase
             .from('employees')
@@ -652,6 +680,13 @@ export const employeeService = {
 
         if (error) {
             console.error('Error updating employee:', error);
+            console.error('Error details:', {
+                message: error.message,
+                details: error.details,
+                hint: error.hint,
+                code: error.code,
+                dbUpdates
+            });
             throw error;
         }
 

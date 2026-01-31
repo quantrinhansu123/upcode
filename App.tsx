@@ -19,7 +19,8 @@ import {
   Pencil,
   X,
   Filter,
-  ChevronDown
+  ChevronDown,
+  FileText
 } from 'lucide-react';
 import {
   BarChart,
@@ -44,6 +45,7 @@ import { EmployeeManager } from './components/EmployeeManager';
 import { TimelineView } from './components/TimelineView';
 import { DailyTaskView } from './components/DailyTaskView';
 import { CoHoiChoAiView } from './components/CoHoiChoAiView';
+import { BaoGiaView } from './components/BaoGiaView';
 import { isNetworkError, getErrorMessage } from './utils/errorHandler';
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
@@ -397,11 +399,6 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onComplet
             ) : null}
           </div>
         </div>
-        {task.description && (
-          <p className={`text-xs text-slate-500 line-clamp-1 ${task.isCompleted ? 'text-slate-400' : ''}`}>
-            {task.description}
-          </p>
-        )}
 
         {/* Subtasks Section */}
         {(subtasks.length > 0 || !task.isCompleted) && (
@@ -929,11 +926,10 @@ const TaskModal: React.FC<TaskModalProps> = ({ onClose, onSubmit, projects, init
             ))}
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Chi tiết thêm (không bắt buộc)</label>
             <textarea
               rows={2}
               className="w-full px-4 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20 resize-none"
-              placeholder="Mô tả cụ thể..."
+              placeholder="Chi tiết thêm (không bắt buộc)..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
@@ -1358,13 +1354,6 @@ export default function App() {
     return { total, completed, pending, overdue, totalHours };
   }, [filteredTasks]);
 
-  const chartData = useMemo(() => {
-    return projects.map(p => ({
-      name: p.name,
-      tasks: tasks.filter(t => t.projectId === p.id && !t.isCompleted).length,
-    }));
-  }, [projects, tasks]);
-
   // Handlers
   const handleAddProject = async (name: string, description: string) => {
     try {
@@ -1783,6 +1772,13 @@ export default function App() {
             <Briefcase size={16} />
             Cơ hội
           </button>
+          <button
+            onClick={() => setActiveView('baogia')}
+            className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg transition-all text-sm ${activeView === 'baogia' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20' : 'text-slate-500 hover:bg-slate-100'}`}
+          >
+            <FileText size={16} />
+            Báo giá
+          </button>
 
           <div className="h-px bg-slate-200 my-2 mx-1"></div>
 
@@ -1892,11 +1888,13 @@ export default function App() {
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div>
             <h2 className="text-2xl font-bold text-slate-900">
-              {activeView === 'employees' ? 'Quản lý Nhân sự' : activeView === 'cohoichoai' ? 'Cơ Hội Cho AI' : activeProjectId === 'all' ? 'Tổng quan Công việc' : projects.find(p => p.id === activeProjectId)?.name}
+              {activeView === 'employees' ? 'Quản lý Nhân sự' : activeView === 'cohoichoai' ? 'Cơ Hội Cho AI' : activeView === 'baogia' ? 'Báo Giá' : activeProjectId === 'all' ? 'Tổng quan Công việc' : projects.find(p => p.id === activeProjectId)?.name}
             </h2>
-            <p className="text-slate-500 mt-1 text-sm">
-              {activeView === 'employees' ? 'Quản lý danh sách nhân viên và thông tin chi tiết.' : activeView === 'cohoichoai' ? 'Chuẩn hóa cách cá nhân hóa quy trình quản trị doanh nghiệp.' : activeProjectId === 'all' ? 'Chào mừng bạn trở lại! Đây là trạng thái dự án của bạn.' : projects.find(p => p.id === activeProjectId)?.description}
-            </p>
+            {activeView !== 'dashboard' && activeView !== 'baogia' && (
+              <p className="text-slate-500 mt-1 text-sm">
+                {activeView === 'employees' ? 'Quản lý danh sách nhân viên và thông tin chi tiết.' : activeView === 'cohoichoai' ? 'Chuẩn hóa cách cá nhân hóa quy trình quản trị doanh nghiệp.' : ''}
+              </p>
+            )}
           </div>
           {activeView === 'dashboard' && (
             <div className="flex items-center gap-3">
@@ -2204,39 +2202,6 @@ export default function App() {
               </div>
 
               <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                <h3 className="font-semibold text-slate-800 mb-4 text-sm">Tiến độ theo dự án</h3>
-                <div className="h-[250px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={chartData}
-                        cx="50%"
-                        cy="45%"
-                        innerRadius={60}
-                        outerRadius={80}
-                        paddingAngle={5}
-                        dataKey="tasks"
-                      >
-                        {chartData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="none" />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                        itemStyle={{ color: '#1e293b', fontWeight: 600 }}
-                      />
-                      <Legend
-                        verticalAlign="bottom"
-                        height={36}
-                        iconType="circle"
-                        formatter={(value) => <span className="text-slate-600 font-medium ml-1">{value}</span>}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                 <h3 className="font-semibold text-slate-800 mb-3 text-sm">Hạn chót sắp tới</h3>
                 <div className="space-y-4">
                   {(() => {
@@ -2315,6 +2280,8 @@ export default function App() {
           </div>
         ) : activeView === 'cohoichoai' ? (
           <CoHoiChoAiView />
+        ) : activeView === 'baogia' ? (
+          <BaoGiaView />
         ) : (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <EmployeeManager />
