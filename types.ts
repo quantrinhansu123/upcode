@@ -22,6 +22,16 @@ export interface Subtask {
   sessions?: SubtaskWorkSession[];
 }
 
+export interface TaskPayment {
+  id: string;
+  taskId: string;
+  amount: number;
+  paymentDate: string;
+  paymentMethod?: string;
+  note?: string;
+  createdAt?: string;
+}
+
 export interface Task {
   id: string;
   projectId: string;
@@ -39,6 +49,8 @@ export interface Task {
   assignee?: Employee; // Legacy field, kept for backward compatibility
   assignees?: TaskAssignee[]; // Nhiều người phụ trách với commission
   priority: 'Low' | 'Medium' | 'High';
+  price?: number; // Giá của công việc
+  payments?: TaskPayment[]; // Lịch sử thanh toán
   createdAt?: string;
 }
 
@@ -68,12 +80,27 @@ export interface TaskType {
   name: string;
 }
 
+export interface ProjectTransaction {
+  id: string;
+  projectId: string;
+  type: 'income' | 'expense'; // 'income' = thu, 'expense' = chi
+  amount: number;
+  description?: string;
+  transactionDate: string;
+  recipientId?: string; // Người nhận (chỉ cho expense)
+  recipient?: Employee; // Thông tin người nhận
+  receiptImageUrl?: string; // URL ảnh hóa đơn (chỉ cho expense)
+  createdAt?: string;
+}
+
 export interface Project {
   id: string;
   name: string;
   description: string;
   color: string;
+  price?: number; // Giá của dự án
   createdAt: string;
+  transactions?: ProjectTransaction[]; // Lịch sử thu chi
 }
 
 export interface AppState {

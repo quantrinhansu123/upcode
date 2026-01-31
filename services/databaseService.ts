@@ -1,14 +1,29 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { getErrorMessage, isNetworkError } from '../utils/errorHandler';
-import type { Project, Task, Employee, TaskType, Subtask, TaskAssignee } from '../types';
+import type { Project, Task, Employee, TaskType, Subtask, TaskAssignee, TaskPayment, ProjectTransaction } from '../types';
 
 // Helper functions to convert between database and app formats
+const dbTransactionToApp = (dbTransaction: any): ProjectTransaction => ({
+    id: dbTransaction.id,
+    projectId: dbTransaction.project_id,
+    type: dbTransaction.type,
+    amount: Number(dbTransaction.amount),
+    description: dbTransaction.description,
+    transactionDate: dbTransaction.transaction_date,
+    recipientId: dbTransaction.recipient_id,
+    recipient: dbTransaction.employees ? dbEmployeeToApp(dbTransaction.employees) : undefined,
+    receiptImageUrl: dbTransaction.receipt_image_url,
+    createdAt: dbTransaction.created_at
+});
+
 const dbProjectToApp = (dbProject: any): Project => ({
     id: dbProject.id,
     name: dbProject.name,
     description: dbProject.description,
     color: dbProject.color,
+    price: dbProject.price ? Number(dbProject.price) : undefined,
     createdAt: dbProject.created_at,
+    transactions: dbProject.project_transactions?.map(dbTransactionToApp) || [],
 });
 
 const dbEmployeeToApp = (dbEmp: any): Employee => ({
@@ -60,6 +75,16 @@ const dbTaskAssigneeToApp = (dbAssignee: any): TaskAssignee => ({
     createdAt: dbAssignee.created_at
 });
 
+const dbPaymentToApp = (dbPayment: any): TaskPayment => ({
+    id: dbPayment.id,
+    taskId: dbPayment.task_id,
+    amount: Number(dbPayment.amount),
+    paymentDate: dbPayment.payment_date,
+    paymentMethod: dbPayment.payment_method,
+    note: dbPayment.note,
+    createdAt: dbPayment.created_at
+});
+
 const dbTaskToApp = (dbTask: any): Task => ({
     id: dbTask.id,
     projectId: dbTask.project_id,
@@ -82,18 +107,21 @@ const dbTaskToApp = (dbTask: any): Task => ({
     assignee: dbTask.employees ? dbEmployeeToApp(dbTask.employees) : undefined,
     assignees: dbTask.task_assignees?.map(dbTaskAssigneeToApp) || [],
     priority: dbTask.priority,
+    price: dbTask.price ? Number(dbTask.price) : undefined,
+    payments: dbTask.task_payments?.map(dbPaymentToApp) || [],
     createdAt: dbTask.created_at
 });
 
 // ============ PROJECT OPERATIONS ============
 
 export const projectService = {
-    // Get all projects
+    // Get all projects (without transactions for faster loading)
     async getAll(): Promise<Project[]> {
         if (!isSupabaseConfigured()) {
             throw new Error(getErrorMessage({ message: 'Supabase not configured' }));
         }
         
+        // Load projects without transactions first for faster initial load
         const { data, error } = await supabase
             .from('projects')
             .select('*')
@@ -108,14 +136,45 @@ export const projectService = {
             throw error;
         }
 
+        // Return projects without transactions (transactions can be loaded separately when needed)
+        return data?.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            description: p.description,
+            color: p.color,
+            price: p.price ? Number(p.price) : undefined,
+            createdAt: p.created_at,
+            transactions: [] // Empty initially, load separately if needed
+        })) || [];
+    },
+
+    // Get all projects with transactions (slower, use when transactions are needed)
+    async getAllWithTransactions(): Promise<Project[]> {
+        if (!isSupabaseConfigured()) {
+            throw new Error(getErrorMessage({ message: 'Supabase not configured' }));
+        }
+        
+        const { data, error } = await supabase
+            .from('projects')
+            .select('*, project_transactions(*, employees(*))')
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('Error fetching projects:', error);
+            if (isNetworkError(error)) {
+                throw new Error(getErrorMessage(error));
+            }
+            throw error;
+        }
+
         return data?.map(dbProjectToApp) || [];
     },
 
-    // Get single project by ID
+    // Get single project by ID (with transactions)
     async getById(id: string): Promise<Project | null> {
         const { data, error } = await supabase
             .from('projects')
-            .select('*')
+            .select('*, project_transactions(*, employees(*))')
             .eq('id', id)
             .single();
 
@@ -127,6 +186,11 @@ export const projectService = {
         return data ? dbProjectToApp(data) : null;
     },
 
+    // Load transactions for a project (lazy load)
+    async loadProjectTransactions(projectId: string): Promise<ProjectTransaction[]> {
+        return projectTransactionService.getByProjectId(projectId);
+    },
+
     // Create new project
     async create(project: Omit<Project, 'id' | 'createdAt'>): Promise<Project> {
         const { data, error } = await supabase
@@ -135,6 +199,7 @@ export const projectService = {
                 name: project.name,
                 description: project.description,
                 color: project.color,
+                price: project.price || null,
             })
             .select()
             .single();
@@ -153,6 +218,7 @@ export const projectService = {
         if (updates.name !== undefined) dbUpdates.name = updates.name;
         if (updates.description !== undefined) dbUpdates.description = updates.description;
         if (updates.color !== undefined) dbUpdates.color = updates.color;
+        if (updates.price !== undefined) dbUpdates.price = updates.price || null;
 
         const { data, error } = await supabase
             .from('projects')
@@ -186,7 +252,37 @@ export const projectService = {
 // ============ TASK OPERATIONS ============
 
 export const taskService = {
-    // Get all tasks
+    // Get all tasks (basic - fast loading, without subtasks and sessions)
+    async getAllBasic(): Promise<Task[]> {
+        try {
+            // Load only essential fields for fast initial load
+            const { data, error } = await supabase
+                .from('tasks')
+                .select('*, work_sessions(*), employees(*), task_assignees(*, employees(*))')
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                console.warn('⚠️ Fetching tasks with relations failed. Retrying basic...', error.message);
+                const retry = await supabase
+                    .from('tasks')
+                    .select('*, work_sessions(*)')
+                    .order('created_at', { ascending: false });
+
+                if (retry.error) {
+                    console.error('❌ Error fetching tasks:', retry.error);
+                    return [];
+                }
+                return retry.data?.map(dbTaskToApp) || [];
+            }
+
+            return data?.map(dbTaskToApp) || [];
+        } catch (error: any) {
+            console.error('❌ Failed to load tasks:', error);
+            return [];
+        }
+    },
+
+    // Get all tasks (full - with subtasks and sessions, slower)
     async getAll(): Promise<Task[]> {
         try {
             // Try fetching with all relations (including employees/assignees, task_assignees with commission, and subtasks with sessions)
@@ -256,7 +352,7 @@ export const taskService = {
     async getById(id: string): Promise<Task | null> {
         let { data, error } = await supabase
             .from('tasks')
-            .select('*, work_sessions(*), employees(*), task_assignees(*, employees(*)), subtasks(*, subtask_work_sessions(*))')
+            .select('*, work_sessions(*), employees(*), task_assignees(*, employees(*)), subtasks(*, subtask_work_sessions(*)), task_payments(*)')
             .eq('id', id)
             .single();
 
@@ -306,7 +402,8 @@ export const taskService = {
             hours_worked: task.hoursWorked || null,
             priority: task.priority || 'Medium',
             task_type: task.taskType && task.taskType.trim() ? task.taskType : null,
-            assignee_id: task.assigneeId && task.assigneeId.trim() ? task.assigneeId : null
+            assignee_id: task.assigneeId && task.assigneeId.trim() ? task.assigneeId : null,
+            price: task.price || null
         };
 
         const { data, error } = await supabase
@@ -361,6 +458,7 @@ export const taskService = {
         if (updates.assigneeId !== undefined) {
             dbUpdates.assignee_id = updates.assigneeId && updates.assigneeId.trim() ? updates.assigneeId : null;
         }
+        if (updates.price !== undefined) dbUpdates.price = updates.price || null;
 
         const { data, error } = await supabase
             .from('tasks')
@@ -945,5 +1043,117 @@ export const subtaskService = {
         }
 
         return data ? dbSubtaskToApp(data) : null;
+    }
+};
+
+// ============ PAYMENT OPERATIONS ============
+
+export const paymentService = {
+    // Create a payment record
+    async create(taskId: string, payment: Omit<TaskPayment, 'id' | 'taskId' | 'createdAt'>): Promise<TaskPayment> {
+        const { data, error } = await supabase
+            .from('task_payments')
+            .insert({
+                task_id: taskId,
+                amount: payment.amount,
+                payment_date: payment.paymentDate || new Date().toISOString(),
+                payment_method: payment.paymentMethod || null,
+                note: payment.note && payment.note.trim() ? payment.note : null
+            })
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Error creating payment:', error);
+            throw error;
+        }
+
+        return dbPaymentToApp(data);
+    },
+
+    // Get all payments for a task
+    async getByTaskId(taskId: string): Promise<TaskPayment[]> {
+        const { data, error } = await supabase
+            .from('task_payments')
+            .select('*')
+            .eq('task_id', taskId)
+            .order('payment_date', { ascending: false });
+
+        if (error) {
+            console.error('Error fetching payments:', error);
+            throw error;
+        }
+
+        return data?.map(dbPaymentToApp) || [];
+    },
+
+    // Delete a payment
+    async delete(id: string): Promise<void> {
+        const { error } = await supabase
+            .from('task_payments')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            console.error('Error deleting payment:', error);
+            throw error;
+        }
+    }
+};
+
+// ============ PROJECT TRANSACTION OPERATIONS ============
+
+export const projectTransactionService = {
+    // Create a transaction (income or expense)
+    async create(projectId: string, transaction: Omit<ProjectTransaction, 'id' | 'projectId' | 'createdAt'>): Promise<ProjectTransaction> {
+        const { data, error } = await supabase
+            .from('project_transactions')
+            .insert({
+                project_id: projectId,
+                type: transaction.type,
+                amount: transaction.amount,
+                description: transaction.description && transaction.description.trim() ? transaction.description : null,
+                transaction_date: transaction.transactionDate || new Date().toISOString(),
+                recipient_id: transaction.recipientId || null,
+                receipt_image_url: transaction.receiptImageUrl || null
+            })
+            .select('*, employees(*)')
+            .single();
+
+        if (error) {
+            console.error('Error creating transaction:', error);
+            throw error;
+        }
+
+        return dbTransactionToApp(data);
+    },
+
+    // Get all transactions for a project
+    async getByProjectId(projectId: string): Promise<ProjectTransaction[]> {
+        const { data, error } = await supabase
+            .from('project_transactions')
+            .select('*, employees(*)')
+            .eq('project_id', projectId)
+            .order('transaction_date', { ascending: false });
+
+        if (error) {
+            console.error('Error fetching transactions:', error);
+            throw error;
+        }
+
+        return data?.map(dbTransactionToApp) || [];
+    },
+
+    // Delete a transaction
+    async delete(id: string): Promise<void> {
+        const { error } = await supabase
+            .from('project_transactions')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            console.error('Error deleting transaction:', error);
+            throw error;
+        }
     }
 };

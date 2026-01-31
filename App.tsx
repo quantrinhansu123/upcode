@@ -20,7 +20,13 @@ import {
   X,
   Filter,
   ChevronDown,
-  FileText
+  FileText,
+  DollarSign,
+  CreditCard,
+  ArrowUpCircle,
+  ArrowDownCircle,
+  Image as ImageIcon,
+  Upload
 } from 'lucide-react';
 import {
   BarChart,
@@ -37,9 +43,9 @@ import {
 } from 'recharts';
 import { format, isPast, isToday, parseISO, differenceInMinutes, differenceInHours } from 'date-fns';
 import { vi } from 'date-fns/locale';
-import { Project, Task, WorkSession, TaskType, Employee, Subtask } from './types';
+import { Project, Task, WorkSession, TaskType, Employee, Subtask, ProjectTransaction } from './types';
 import { suggestTasksForProject } from './services/geminiService';
-import { projectService, taskService, taskTypeService, employeeService, subtaskService } from './services/databaseService';
+import { projectService, taskService, taskTypeService, employeeService, subtaskService, paymentService, projectTransactionService } from './services/databaseService';
 import testDatabaseConnection from './database/test-connection';
 import { EmployeeManager } from './components/EmployeeManager';
 import { TimelineView } from './components/TimelineView';
@@ -74,7 +80,8 @@ interface TaskItemProps {
 
 interface ProjectModalProps {
   onClose: () => void;
-  onSubmit: (name: string, description: string) => void;
+  onSubmit: (name: string, description: string, price?: number) => void;
+  initialData?: Project;
 }
 
 interface TaskModalProps {
@@ -176,6 +183,7 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onComplet
   const [subtasks, setSubtasks] = useState<Subtask[]>(task.subtasks || []);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
   const isOverdue = !task.isCompleted && isPast(parseISO(task.deadline)) && !isToday(parseISO(task.deadline));
   // Check if task is running: either has startedAt (legacy) or has an active session (no endedAt)
@@ -196,6 +204,15 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onComplet
   const totalWorked = totalWorkedMinutes > 0
     ? `${Math.floor(totalWorkedMinutes / 60)}h ${totalWorkedMinutes % 60}m`
     : null;
+
+  // Calculate total paid amount
+  const totalPaid = useMemo(() => {
+    return task.payments?.reduce((sum, p) => sum + p.amount, 0) || 0;
+  }, [task.payments]);
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('vi-VN').format(amount);
+  };
 
   // Update subtasks when task changes
   // Update subtasks when task changes
@@ -594,10 +611,33 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onComplet
               {format(parseISO(task.completedAt), 'dd/MM')}
             </span>
           )}
+          {task.price && task.price > 0 && (
+            <div className="flex items-center gap-1 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
+              <DollarSign size={10} className="text-emerald-600" />
+              <span className="text-emerald-700 font-semibold">{formatCurrency(task.price)}</span>
+              {totalPaid > 0 && (
+                <span className="text-emerald-600 text-[10px]">
+                  ({formatCurrency(totalPaid)}/{formatCurrency(task.price)})
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
       <div className="flex items-center gap-1.5 flex-shrink-0">
+        {task.price && task.price > 0 && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsPaymentModalOpen(true);
+            }}
+            className="p-1.5 text-emerald-600 hover:bg-emerald-100 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+            title="Thanh toán"
+          >
+            <CreditCard size={16} />
+          </button>
+        )}
         {!task.isCompleted && (
           <>
             {isStarted ? (
@@ -649,21 +689,554 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onComplet
           <X size={14} />
         </button>
       </div>
+      {isPaymentModalOpen && (
+        <PaymentModal
+          task={task}
+          onClose={() => setIsPaymentModalOpen(false)}
+          onPaymentAdded={async () => {
+            const updatedTask = await taskService.getById(task.id);
+            if (updatedTask) {
+              onTaskUpdate(updatedTask);
+            }
+            setIsPaymentModalOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 };
 
-const ProjectModal: React.FC<ProjectModalProps> = ({ onClose, onSubmit }) => {
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
+interface PaymentModalProps {
+  task: Task;
+  onClose: () => void;
+  onPaymentAdded: () => void;
+}
+
+const PaymentModal: React.FC<PaymentModalProps> = ({ task, onClose, onPaymentAdded }) => {
+  const [amount, setAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('bank_transfer');
+  const [note, setNote] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const totalPaid = task.payments?.reduce((sum, p) => sum + p.amount, 0) || 0;
+  const remaining = (task.price || 0) - totalPaid;
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('vi-VN').format(amount);
+  };
+
+  // Format price with dots (1.000.000)
+  const formatPrice = (value: string) => {
+    const numbers = value.replace(/\D/g, '');
+    return numbers.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  };
+
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatPrice(e.target.value);
+    setAmount(formatted);
+  };
+
+  const parseAmount = (value: string): number => {
+    const numbers = value.replace(/\D/g, '');
+    return numbers ? Number(numbers) : 0;
+  };
+
+  const handleSubmit = async () => {
+    const paymentAmount = parseAmount(amount);
+    if (!paymentAmount || paymentAmount <= 0) {
+      alert('Vui lòng nhập số tiền hợp lệ');
+      return;
+    }
+
+    if (paymentAmount > remaining) {
+      alert(`Số tiền thanh toán không được vượt quá số tiền còn lại: ${formatCurrency(remaining)} VNĐ`);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await paymentService.create(task.id, {
+        amount: paymentAmount,
+        paymentDate: new Date().toISOString(),
+        paymentMethod,
+        note: note.trim() || undefined
+      });
+      onPaymentAdded();
+    } catch (error: any) {
+      console.error('Error creating payment:', error);
+      alert('Không thể tạo thanh toán. Vui lòng thử lại.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-2xl font-bold text-slate-900">Tạo dự án mới</h3>
+          <h3 className="text-2xl font-bold text-slate-900">Ghi nhận thanh toán</h3>
           <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full text-slate-500"><X size={20} /></button>
         </div>
+        <div className="space-y-4">
+          <div className="p-4 bg-slate-50 rounded-xl">
+            <div className="text-sm text-slate-600 mb-2">Công việc: <span className="font-semibold text-slate-900">{task.title}</span></div>
+            <div className="text-sm text-slate-600 mb-1">Tổng giá: <span className="font-bold text-emerald-600">{formatCurrency(task.price || 0)} VNĐ</span></div>
+            <div className="text-sm text-slate-600 mb-1">Đã thanh toán: <span className="font-semibold text-indigo-600">{formatCurrency(totalPaid)} VNĐ</span></div>
+            <div className="text-sm text-slate-600">Còn lại: <span className="font-bold text-rose-600">{formatCurrency(remaining)} VNĐ</span></div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Số tiền (VNĐ)</label>
+            <input
+              autoFocus
+              type="text"
+              inputMode="numeric"
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
+              placeholder={`Tối đa: ${formatCurrency(remaining)} (ví dụ: 1.000.000)`}
+              value={amount}
+              onChange={handleAmountChange}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Phương thức thanh toán</label>
+            <select
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500/20"
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value)}
+            >
+              <option value="bank_transfer">Chuyển khoản</option>
+              <option value="cash">Tiền mặt</option>
+              <option value="other">Khác</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Ghi chú (không bắt buộc)</label>
+            <textarea
+              rows={2}
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500/20 resize-none"
+              placeholder="Ghi chú về thanh toán..."
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+            />
+          </div>
+
+          {task.payments && task.payments.length > 0 && (
+            <div className="mt-4">
+              <h4 className="text-sm font-semibold text-slate-700 mb-2">Lịch sử thanh toán:</h4>
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {task.payments.map((payment) => (
+                  <div key={payment.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg text-sm">
+                    <div>
+                      <div className="font-semibold text-slate-900">{formatCurrency(payment.amount)} VNĐ</div>
+                      <div className="text-xs text-slate-500">
+                        {format(parseISO(payment.paymentDate), 'dd/MM/yyyy HH:mm')}
+                        {payment.paymentMethod && ` • ${payment.paymentMethod === 'bank_transfer' ? 'Chuyển khoản' : payment.paymentMethod === 'cash' ? 'Tiền mặt' : 'Khác'}`}
+                      </div>
+                      {payment.note && <div className="text-xs text-slate-400 italic">{payment.note}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-3 mt-6">
+            <button
+              onClick={onClose}
+              className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-semibold hover:bg-slate-200 transition-all"
+            >
+              Hủy
+            </button>
+            <button
+              disabled={loading || !amount || parseAmount(amount) <= 0 || parseAmount(amount) > remaining}
+              onClick={handleSubmit}
+              className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Đang xử lý...' : 'Xác nhận'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+interface ProjectTransactionModalProps {
+  project: Project;
+  employees: Employee[];
+  onClose: () => void;
+  onTransactionAdded: () => void;
+}
+
+const ProjectTransactionModal: React.FC<ProjectTransactionModalProps> = ({ project, employees, onClose, onTransactionAdded }) => {
+  const [type, setType] = useState<'income' | 'expense'>('income');
+  const [amount, setAmount] = useState('');
+  const [description, setDescription] = useState('');
+  const [transactionDate, setTransactionDate] = useState(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+  const [recipientId, setRecipientId] = useState('');
+  const [receiptImageUrl, setReceiptImageUrl] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [transactions, setTransactions] = useState<ProjectTransaction[]>(project.transactions || []);
+  const [loadingTransactions, setLoadingTransactions] = useState(false);
+
+  // Load transactions when modal opens (lazy load for better performance)
+  useEffect(() => {
+    const loadTransactions = async () => {
+      if (!project.transactions || project.transactions.length === 0) {
+        setLoadingTransactions(true);
+        try {
+          const loadedTransactions = await projectService.loadProjectTransactions(project.id);
+          setTransactions(loadedTransactions);
+        } catch (error) {
+          console.error('Error loading transactions:', error);
+        } finally {
+          setLoadingTransactions(false);
+        }
+      }
+    };
+    loadTransactions();
+  }, [project.id]);
+
+  // Format price with dots (1.000.000)
+  const formatPrice = (value: string) => {
+    const numbers = value.replace(/\D/g, '');
+    return numbers.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  };
+
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatPrice(e.target.value);
+    setAmount(formatted);
+  };
+
+  const parseAmount = (value: string): number => {
+    const numbers = value.replace(/\D/g, '');
+    return numbers ? Number(numbers) : 0;
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Vui lòng chọn file ảnh');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Kích thước file không được vượt quá 5MB');
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      // Convert to base64 for now (có thể thay bằng Supabase Storage sau)
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        setReceiptImageUrl(base64String);
+        setIsUploading(false);
+      };
+      reader.onerror = () => {
+        alert('Lỗi khi đọc file');
+        setIsUploading(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      alert('Không thể tải ảnh lên');
+      setIsUploading(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    const transactionAmount = parseAmount(amount);
+    if (!transactionAmount || transactionAmount <= 0) {
+      alert('Vui lòng nhập số tiền hợp lệ');
+      return;
+    }
+
+    if (type === 'expense' && !recipientId) {
+      alert('Vui lòng chọn người nhận');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const newTransaction = await projectTransactionService.create(project.id, {
+        type,
+        amount: transactionAmount,
+        description: description.trim() || undefined,
+        transactionDate: transactionDate ? new Date(transactionDate).toISOString() : new Date().toISOString(),
+        recipientId: type === 'expense' ? recipientId : undefined,
+        receiptImageUrl: type === 'expense' && receiptImageUrl ? receiptImageUrl : undefined
+      });
+      // Update local transactions state
+      setTransactions([newTransaction, ...transactions]);
+      // Reset form
+      setAmount('');
+      setDescription('');
+      setRecipientId('');
+      setReceiptImageUrl('');
+      onTransactionAdded();
+    } catch (error: any) {
+      console.error('Error creating transaction:', error);
+      alert('Không thể tạo giao dịch. Vui lòng thử lại.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Calculate balance from loaded transactions
+  const totalIncome = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+  const balance = totalIncome - totalExpense;
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('vi-VN').format(amount);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-2xl font-bold text-slate-900">Thu chi dự án</h3>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full text-slate-500"><X size={20} /></button>
+        </div>
+        <div className="space-y-4">
+          <div className="p-4 bg-slate-50 rounded-xl">
+            <div className="text-sm text-slate-600 mb-2">Dự án: <span className="font-semibold text-slate-900">{project.name}</span></div>
+            <div className="grid grid-cols-3 gap-3 mt-3">
+              <div className="text-center">
+                <div className="text-xs text-slate-500 mb-1">Tổng thu</div>
+                <div className="text-sm font-bold text-emerald-600">{formatCurrency(totalIncome)}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xs text-slate-500 mb-1">Tổng chi</div>
+                <div className="text-sm font-bold text-rose-600">{formatCurrency(totalExpense)}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xs text-slate-500 mb-1">Số dư</div>
+                <div className={`text-sm font-bold ${balance >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>
+                  {formatCurrency(balance)}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Loại giao dịch</label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setType('income')}
+                className={`py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
+                  type === 'income'
+                    ? 'bg-emerald-600 text-white shadow-md'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <ArrowUpCircle size={18} />
+                Thu
+              </button>
+              <button
+                onClick={() => setType('expense')}
+                className={`py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
+                  type === 'expense'
+                    ? 'bg-rose-600 text-white shadow-md'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <ArrowDownCircle size={18} />
+                Chi
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Số tiền (VNĐ)</label>
+            <input
+              autoFocus
+              type="text"
+              inputMode="numeric"
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+              placeholder="Nhập số tiền (ví dụ: 1.000.000)..."
+              value={amount}
+              onChange={handleAmountChange}
+            />
+          </div>
+
+          {type === 'expense' && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Thời gian chi</label>
+                <input
+                  type="datetime-local"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  value={transactionDate}
+                  onChange={(e) => setTransactionDate(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Người nhận <span className="text-rose-500">*</span></label>
+                <select
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  value={recipientId}
+                  onChange={(e) => setRecipientId(e.target.value)}
+                >
+                  <option value="">-- Chọn người nhận --</option>
+                  {(() => {
+                    const grouped = employees.reduce((acc, emp) => {
+                      const dept = emp.department || 'Khác';
+                      if (!acc[dept]) acc[dept] = [];
+                      acc[dept].push(emp);
+                      return acc;
+                    }, {} as Record<string, typeof employees>);
+                    return Object.keys(grouped).sort().map(dept => (
+                      <optgroup key={dept} label={dept}>
+                        {grouped[dept].map(e => (
+                          <option key={e.id} value={e.id}>{e.fullName}</option>
+                        ))}
+                      </optgroup>
+                    ));
+                  })()}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Hóa đơn (không bắt buộc)</label>
+                <div className="space-y-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="hidden"
+                    id="receipt-upload"
+                    disabled={isUploading}
+                  />
+                  <label
+                    htmlFor="receipt-upload"
+                    className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-slate-300 cursor-pointer hover:border-indigo-500 hover:bg-indigo-50 transition-all ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    {isUploading ? (
+                      <>
+                        <Clock size={18} className="text-indigo-600 animate-spin" />
+                        <span className="text-sm text-slate-600">Đang tải...</span>
+                      </>
+                    ) : receiptImageUrl ? (
+                      <>
+                        <ImageIcon size={18} className="text-emerald-600" />
+                        <span className="text-sm text-emerald-600 font-medium">Đã tải ảnh</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload size={18} className="text-slate-400" />
+                        <span className="text-sm text-slate-600">Tải ảnh hóa đơn lên</span>
+                      </>
+                    )}
+                  </label>
+                  {receiptImageUrl && (
+                    <div className="relative">
+                      <img
+                        src={receiptImageUrl}
+                        alt="Hóa đơn"
+                        className="w-full h-48 object-contain rounded-xl border border-slate-200"
+                      />
+                      <button
+                        onClick={() => setReceiptImageUrl('')}
+                        className="absolute top-2 right-2 p-1.5 bg-white rounded-full shadow-md hover:bg-rose-50 text-rose-500 transition-all"
+                        title="Xóa ảnh"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Mô tả (không bắt buộc)</label>
+            <textarea
+              rows={2}
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20 resize-none"
+              placeholder="Ghi chú về giao dịch..."
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+          </div>
+
+          <div className="flex gap-3 mt-6">
+            <button
+              onClick={onClose}
+              className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-semibold hover:bg-slate-200 transition-all"
+            >
+              Hủy
+            </button>
+            <button
+              disabled={loading || !amount || parseAmount(amount) <= 0}
+              onClick={handleSubmit}
+              className={`flex-1 py-3 text-white rounded-xl font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                type === 'income'
+                  ? 'bg-emerald-600 hover:bg-emerald-700'
+                  : 'bg-rose-600 hover:bg-rose-700'
+              }`}
+            >
+              {loading ? 'Đang xử lý...' : 'Xác nhận'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ProjectModal: React.FC<ProjectModalProps> = ({ onClose, onSubmit, initialData }) => {
+  const [name, setName] = useState(initialData?.name || '');
+  const [description, setDescription] = useState(initialData?.description || '');
+  
+  // Format price with dots (1.000.000)
+  const formatPrice = (value: string) => {
+    // Remove all non-digit characters
+    const numbers = value.replace(/\D/g, '');
+    // Add dots as thousand separators
+    return numbers.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  };
+
+  const [price, setPrice] = useState(
+    initialData?.price ? formatPrice(initialData.price.toString()) : ''
+  );
+
+  const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatPrice(e.target.value);
+    setPrice(formatted);
+  };
+
+  const parsePrice = (value: string): number | undefined => {
+    const numbers = value.replace(/\D/g, '');
+    return numbers ? Number(numbers) : undefined;
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-2xl font-bold text-slate-900">{initialData ? 'Cập nhật dự án' : 'Tạo dự án mới'}</h3>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full text-slate-500"><X size={20} /></button>
+        </div>
+        {initialData?.createdAt && (
+          <div className="mb-4 p-3 bg-slate-50 rounded-xl">
+            <div className="text-xs text-slate-500 mb-1">Thời gian tạo dự án</div>
+            <div className="text-sm font-medium text-slate-700">
+              {format(parseISO(initialData.createdAt), 'dd/MM/yyyy HH:mm', { locale: vi })}
+            </div>
+          </div>
+        )}
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Tên dự án</label>
@@ -685,12 +1258,23 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ onClose, onSubmit }) => {
               onChange={(e) => setDescription(e.target.value)}
             />
           </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Giá dự án (VNĐ)</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+              placeholder="Nhập giá dự án (ví dụ: 1.000.000)..."
+              value={price}
+              onChange={handlePriceChange}
+            />
+          </div>
           <button
             disabled={!name}
-            onClick={() => onSubmit(name, description)}
+            onClick={() => onSubmit(name, description, parsePrice(price))}
             className="w-full py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-all disabled:opacity-50 mt-4"
           >
-            Tạo ngay
+            {initialData ? 'Lưu thay đổi' : 'Tạo ngay'}
           </button>
         </div>
       </div>
@@ -781,6 +1365,26 @@ const TaskModal: React.FC<TaskModalProps> = ({ onClose, onSubmit, projects, init
   const [assignees, setAssignees] = useState<Array<{ employeeId: string; commission: number }>>(
     initialData?.assignees?.map(a => ({ employeeId: a.employeeId, commission: a.commission })) || []
   );
+
+  // Format price with dots (1.000.000)
+  const formatPrice = (value: string) => {
+    const numbers = value.replace(/\D/g, '');
+    return numbers.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  };
+
+  const [price, setPrice] = useState<string>(
+    initialData?.price ? formatPrice(initialData.price.toString()) : ''
+  );
+
+  const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatPrice(e.target.value);
+    setPrice(formatted);
+  };
+
+  const parsePrice = (value: string): number | undefined => {
+    const numbers = value.replace(/\D/g, '');
+    return numbers ? Number(numbers) : undefined;
+  };
 
   // Update default taskType if taskTypes changes and we are not editing
   useEffect(() => {
@@ -934,6 +1538,17 @@ const TaskModal: React.FC<TaskModalProps> = ({ onClose, onSubmit, projects, init
               onChange={(e) => setDescription(e.target.value)}
             />
           </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Giá (VNĐ)</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20"
+              placeholder="Nhập giá công việc (ví dụ: 1.000.000)..."
+              value={price}
+              onChange={handlePriceChange}
+            />
+          </div>
           <button
             disabled={!title || !projectId}
             onClick={() => onSubmit({ 
@@ -944,6 +1559,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ onClose, onSubmit, projects, init
               priority, 
               taskType, 
               assigneeId,
+              price: parsePrice(price),
               assignees: assignees.filter(a => a.employeeId).map(a => ({
                 employeeId: a.employeeId,
                 commission: a.commission || 0
@@ -1026,6 +1642,7 @@ export default function App() {
 
   const [activeProjectId, setActiveProjectId] = useState<string | 'all'>('all');
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -1040,6 +1657,8 @@ export default function App() {
   const [pendingActions, setPendingActions] = useState<Array<{ type: string; taskId: string; data: any }>>([]);
   const [showCompletedTasks, setShowCompletedTasks] = useState(false);
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
+  const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
+  const [selectedProjectForTransaction, setSelectedProjectForTransaction] = useState<Project | null>(null);
 
   // Monitor online/offline status and sync pending actions
   useEffect(() => {
@@ -1094,7 +1713,7 @@ export default function App() {
     };
   }, [pendingActions]);
 
-  // Load data from Supabase on mount
+  // Load data from Supabase on mount (optimized - parallel loading)
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -1105,50 +1724,49 @@ export default function App() {
         console.log('🔌 Testing database connection...');
         await testDatabaseConnection();
 
-        // Load data individually to ensure partial failures don't block the app
-        let loadedProjects: Project[] = [];
-        try {
-          loadedProjects = await projectService.getAll();
-        } catch (e) {
-          console.error('❌ Failed to load projects:', e);
-          throw e; // Critical error, let it fall through to catch block
+        // Load data in parallel for faster loading
+        console.log('📦 Loading data in parallel...');
+        const [loadedProjects, loadedTasks, loadedTypes, loadedEmployees] = await Promise.allSettled([
+          projectService.getAll(),
+          taskService.getAllBasic(), // Use basic version for faster initial load
+          taskTypeService.getAll(),
+          employeeService.getAll()
+        ]);
+
+        // Process results
+        if (loadedProjects.status === 'fulfilled') {
+          setProjects(loadedProjects.value);
+          console.log('✅ Projects loaded:', loadedProjects.value.length);
+        } else {
+          console.error('❌ Failed to load projects:', loadedProjects.reason);
+          throw loadedProjects.reason; // Critical error
         }
 
-        let loadedTasks: Task[] = [];
-        try {
-          loadedTasks = await taskService.getAll();
-          console.log('✅ Tasks loaded successfully:', loadedTasks.length);
-        } catch (e: any) {
-          console.error('❌ Failed to load tasks:', e);
-          // Set error but don't throw - allow app to continue with empty tasks
-          setDbError(`Không thể tải danh sách công việc: ${getErrorMessage(e)}`);
-          loadedTasks = []; // Set empty array as fallback
+        if (loadedTasks.status === 'fulfilled') {
+          setTasks(loadedTasks.value);
+          console.log('✅ Tasks loaded (basic):', loadedTasks.value.length);
+          
+          // Load subtasks and sessions in background (only if needed)
+          // This will be loaded on-demand when user expands a task
+        } else {
+          console.error('❌ Failed to load tasks:', loadedTasks.reason);
+          setDbError(`Không thể tải danh sách công việc: ${getErrorMessage(loadedTasks.reason)}`);
+          setTasks([]);
         }
 
-        let loadedTypes: TaskType[] = [];
-        try {
-          loadedTypes = await taskTypeService.getAll();
-        } catch (e) {
-          console.warn('⚠️ Failed to load task types:', e);
+        if (loadedTypes.status === 'fulfilled') {
+          setTaskTypes(loadedTypes.value);
+        } else {
+          console.warn('⚠️ Failed to load task types:', loadedTypes.reason);
         }
 
-        let loadedEmployees: Employee[] = [];
-        try {
-          loadedEmployees = await employeeService.getAll();
-        } catch (e) {
-          console.warn('⚠️ Failed to load employees:', e);
+        if (loadedEmployees.status === 'fulfilled') {
+          setEmployees(loadedEmployees.value);
+        } else {
+          console.warn('⚠️ Failed to load employees:', loadedEmployees.reason);
         }
 
-        setProjects(loadedProjects);
-        setTasks(loadedTasks);
-        setTaskTypes(loadedTypes);
-        setEmployees(loadedEmployees);
-        console.log('✅ Data loaded:', {
-          projects: loadedProjects.length,
-          tasks: loadedTasks.length,
-          types: loadedTypes.length,
-          employees: loadedEmployees.length
-        });
+        console.log('✅ Initial data loaded successfully');
       } catch (error: any) {
         console.error('❌ Error loading data from database:', error);
         setDbError(getErrorMessage(error));
@@ -1166,6 +1784,33 @@ export default function App() {
 
     loadData();
   }, []);
+
+  // Load transactions for active project
+  useEffect(() => {
+    const loadProjectTransactions = async () => {
+      if (activeProjectId !== 'all' && activeView === 'dashboard') {
+        const activeProject = projects.find(p => p.id === activeProjectId);
+        if (activeProject && (!activeProject.transactions || activeProject.transactions.length === 0)) {
+          try {
+            console.log('📦 Loading transactions for project:', activeProjectId);
+            const transactions = await projectService.loadProjectTransactions(activeProjectId);
+            setProjects(prevProjects => 
+              prevProjects.map(p => 
+                p.id === activeProjectId 
+                  ? { ...p, transactions }
+                  : p
+              )
+            );
+            console.log('✅ Transactions loaded:', transactions.length);
+          } catch (error) {
+            console.error('Error loading project transactions:', error);
+          }
+        }
+      }
+    };
+
+    loadProjectTransactions();
+  }, [activeProjectId, activeView]); // Removed projects from dependencies to avoid infinite loop
 
   // Auto-pause all active sessions when page unloads
   useEffect(() => {
@@ -1355,21 +2000,41 @@ export default function App() {
   }, [filteredTasks]);
 
   // Handlers
-  const handleAddProject = async (name: string, description: string) => {
+  const handleAddProject = async (name: string, description: string, price?: number) => {
     try {
-      const newProject = await projectService.create({
-        name,
-        description,
-        color: COLORS[projects.length % COLORS.length]
-      });
+      if (editingProject) {
+        // Update existing project
+        const updatedProject = await projectService.update(editingProject.id, {
+          name,
+          description,
+          price
+        });
+        setProjects(prev => prev.map(p => p.id === updatedProject.id ? updatedProject : p));
+        setIsProjectModalOpen(false);
+        setEditingProject(null);
+        console.log('✅ Project updated:', updatedProject.name);
+      } else {
+        // Create new project
+        const newProject = await projectService.create({
+          name,
+          description,
+          price,
+          color: COLORS[projects.length % COLORS.length]
+        });
 
-      setProjects([...projects, newProject]);
-      setIsProjectModalOpen(false);
-      console.log('✅ Project created:', newProject.name);
+        setProjects([...projects, newProject]);
+        setIsProjectModalOpen(false);
+        console.log('✅ Project created:', newProject.name);
+      }
     } catch (error: any) {
-      console.error('❌ Error creating project:', error);
-      alert('Không thể tạo dự án. Vui lòng thử lại.');
+      console.error('❌ Error saving project:', error);
+      alert('Không thể lưu dự án. Vui lòng thử lại.');
     }
+  };
+
+  const handleEditProject = (project: Project) => {
+    setEditingProject(project);
+    setIsProjectModalOpen(true);
   };
 
   const handleSaveTask = async (taskData: any) => {
@@ -1378,6 +2043,7 @@ export default function App() {
         // Update existing task
         const updatedTask = await taskService.update(editingTask.id, {
           ...taskData,
+          price: taskData.price,
           assignees: taskData.assignees || []
         });
         setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
@@ -1393,6 +2059,7 @@ export default function App() {
           priority: taskData.priority,
           taskType: taskData.taskType,
           assigneeId: taskData.assigneeId,
+          price: taskData.price,
           assignees: taskData.assignees || [],
           isCompleted: false
         });
@@ -1742,7 +2409,7 @@ export default function App() {
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-slate-50">
-      <aside className="w-full md:w-56 bg-white border-r border-slate-200 p-4 flex flex-col gap-6 sticky top-0 h-auto md:h-screen overflow-y-auto z-10">
+      <aside className="w-full md:w-72 bg-white border-r border-slate-200 p-4 flex flex-col gap-6 sticky top-0 h-auto md:h-screen overflow-y-auto z-10">
         <div className="flex items-center gap-2 mb-4">
           <div className="bg-indigo-600 p-1.5 rounded-lg text-white">
             <LayoutDashboard size={18} />
@@ -1809,7 +2476,24 @@ export default function App() {
                   >
                     <div className="flex items-center gap-2">
                       <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
-                      <span className="truncate text-xs">{p.name}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="truncate text-xs">{p.name}</div>
+                        {p.createdAt && (
+                          <div className="text-[10px] text-slate-400 mt-0.5">
+                            {format(parseISO(p.createdAt), 'dd/MM/yyyy', { locale: vi })}
+                          </div>
+                        )}
+                      </div>
+                      {(() => {
+                        const totalIncome = p.transactions?.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0) || 0;
+                        const totalExpense = p.transactions?.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0) || 0;
+                        const balance = totalIncome - totalExpense;
+                        return balance !== 0 ? (
+                          <span className={`text-[10px] font-semibold shrink-0 ${balance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            {new Intl.NumberFormat('vi-VN').format(balance)}
+                          </span>
+                        ) : null;
+                      })()}
                     </div>
                     {(() => {
                       const pTasks = tasks.filter(t => t.projectId === p.id);
@@ -1832,12 +2516,33 @@ export default function App() {
                       ) : null;
                     })()}
                   </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); deleteProject(p.id); }}
-                    className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-red-500 transition-all"
-                  >
-                    <Trash2 size={12} />
-                  </button>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedProjectForTransaction(p);
+                        setIsTransactionModalOpen(true);
+                      }}
+                      className="p-0.5 text-slate-400 hover:text-emerald-500 transition-all"
+                      title="Thu chi"
+                    >
+                      <DollarSign size={12} />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleEditProject(p); }}
+                      className="p-0.5 text-slate-400 hover:text-indigo-500 transition-all"
+                      title="Sửa"
+                    >
+                      <Pencil size={12} />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); deleteProject(p.id); }}
+                      className="p-0.5 text-slate-400 hover:text-red-500 transition-all"
+                      title="Xóa"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -1887,48 +2592,100 @@ export default function App() {
 
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div>
-            <h2 className="text-2xl font-bold text-slate-900">
-              {activeView === 'employees' ? 'Quản lý Nhân sự' : activeView === 'cohoichoai' ? 'Cơ Hội Cho AI' : activeView === 'baogia' ? 'Báo Giá' : activeProjectId === 'all' ? 'Tổng quan Công việc' : projects.find(p => p.id === activeProjectId)?.name}
-            </h2>
+            <div className="flex items-center gap-4">
+              <h2 className="text-2xl font-bold text-slate-900">
+                {activeView === 'employees' ? 'Quản lý Nhân sự' : activeView === 'cohoichoai' ? 'Cơ Hội Cho AI' : activeView === 'baogia' ? 'Báo Giá' : activeProjectId === 'all' ? 'Tổng quan Công việc' : projects.find(p => p.id === activeProjectId)?.name}
+              </h2>
+              {activeView === 'dashboard' && activeProjectId !== 'all' && (() => {
+                const activeProject = projects.find(p => p.id === activeProjectId);
+                if (!activeProject) return null;
+                const totalIncome = activeProject.transactions?.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0) || 0;
+                const totalExpense = activeProject.transactions?.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0) || 0;
+                const balance = totalIncome - totalExpense;
+                const formatCurrency = (amount: number) => {
+                  return new Intl.NumberFormat('vi-VN').format(amount);
+                };
+
+                return (
+                  <div className="flex items-center gap-3">
+                    <div className="px-4 py-2.5 bg-emerald-50 rounded-xl border-2 border-emerald-200 shadow-sm">
+                      <div className="flex flex-col items-center gap-1">
+                        <div className="flex items-center gap-1.5">
+                          <ArrowUpCircle size={16} className="text-emerald-600" />
+                          <span className="text-sm font-black text-emerald-700 uppercase tracking-wide">Tổng thu</span>
+                        </div>
+                        <div className="text-sm font-black text-emerald-600 mt-0.5">
+                          {formatCurrency(totalIncome)} VNĐ
+                        </div>
+                      </div>
+                    </div>
+                    <div className="px-4 py-2.5 bg-rose-50 rounded-xl border-2 border-rose-200 shadow-sm">
+                      <div className="flex flex-col items-center gap-1">
+                        <div className="flex items-center gap-1.5">
+                          <ArrowDownCircle size={16} className="text-rose-600" />
+                          <span className="text-sm font-black text-rose-700 uppercase tracking-wide">Tổng chi</span>
+                        </div>
+                        <div className="text-sm font-black text-rose-600 mt-0.5">
+                          {formatCurrency(totalExpense)} VNĐ
+                        </div>
+                      </div>
+                    </div>
+                    <div className={`px-4 py-2.5 rounded-xl border-2 shadow-sm ${balance >= 0 ? 'bg-indigo-50 border-indigo-200' : 'bg-rose-50 border-rose-200'}`}>
+                      <div className="flex flex-col items-center gap-1">
+                        <div className="flex items-center gap-1.5">
+                          <DollarSign size={16} className={balance >= 0 ? 'text-indigo-600' : 'text-rose-600'} />
+                          <span className={`text-sm font-black uppercase tracking-wide ${balance >= 0 ? 'text-indigo-700' : 'text-rose-700'}`}>Số dư</span>
+                        </div>
+                        <div className={`text-sm font-black mt-0.5 ${balance >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>
+                          {formatCurrency(balance)} VNĐ
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setSelectedProjectForTransaction(activeProject);
+                        setIsTransactionModalOpen(true);
+                      }}
+                      className="px-3 py-2.5 bg-indigo-600 text-white text-xs font-black rounded-xl hover:bg-indigo-700 transition-all flex items-center gap-1.5 shadow-md"
+                    >
+                      <DollarSign size={14} />
+                      Thu chi
+                    </button>
+                  </div>
+                );
+              })()}
+            </div>
             {activeView !== 'dashboard' && activeView !== 'baogia' && (
               <p className="text-slate-500 mt-1 text-sm">
                 {activeView === 'employees' ? 'Quản lý danh sách nhân viên và thông tin chi tiết.' : activeView === 'cohoichoai' ? 'Chuẩn hóa cách cá nhân hóa quy trình quản trị doanh nghiệp.' : ''}
               </p>
             )}
           </div>
-          {activeView === 'dashboard' && (
-            <div className="flex items-center gap-3">
-              <div className="relative group">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                <input
-                  type="text"
-                  placeholder="Tìm kiếm công việc..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all w-full md:w-64"
-                />
-              </div>
-
-              {activeProjectId !== 'all' && (
-                <button
-                  onClick={() => handleAiSuggest(activeProjectId)}
-                  disabled={isAiLoading}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-full text-sm font-medium hover:shadow-lg transition-all disabled:opacity-50"
-                >
-                  {isAiLoading ? <Clock size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                  Gợi ý AI
-                </button>
-              )}
-              <button
-                onClick={() => setIsTaskModalOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-full text-sm font-medium hover:bg-slate-800 transition-all"
-              >
-                <Plus size={16} />
-                Thêm việc
-              </button>
-            </div>
-          )}
         </header>
+
+        {/* Search bar below header */}
+        {activeView === 'dashboard' && (
+          <div className="flex items-center gap-3 mb-6">
+            <div className="relative group flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <input
+                type="text"
+                placeholder="Tìm kiếm công việc..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all w-full"
+              />
+            </div>
+
+            <button
+              onClick={() => setIsTaskModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-full text-sm font-medium hover:bg-slate-800 transition-all"
+            >
+              <Plus size={16} />
+              Thêm việc
+            </button>
+          </div>
+        )}
 
         {activeView === 'dashboard' ? (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -2288,7 +3045,16 @@ export default function App() {
           </div>
         )}
 
-        {isProjectModalOpen && <ProjectModal onClose={() => setIsProjectModalOpen(false)} onSubmit={handleAddProject} />}
+        {isProjectModalOpen && (
+          <ProjectModal
+            onClose={() => {
+              setIsProjectModalOpen(false);
+              setEditingProject(null);
+            }}
+            initialData={editingProject || undefined}
+            onSubmit={handleAddProject}
+          />
+        )}
         {isTaskModalOpen && <TaskModal
           onClose={() => {
             setIsTaskModalOpen(false);
@@ -2307,6 +3073,35 @@ export default function App() {
           const types = await taskTypeService.getAll();
           setTaskTypes(types);
         }} />}
+        {isTransactionModalOpen && selectedProjectForTransaction && (
+          <ProjectTransactionModal
+            project={selectedProjectForTransaction}
+            employees={employees}
+            onClose={() => {
+              setIsTransactionModalOpen(false);
+              setSelectedProjectForTransaction(null);
+            }}
+            onTransactionAdded={async () => {
+              // Reload transactions for the project
+              if (selectedProjectForTransaction) {
+                try {
+                  const transactions = await projectService.loadProjectTransactions(selectedProjectForTransaction.id);
+                  setProjects(prevProjects => 
+                    prevProjects.map(p => 
+                      p.id === selectedProjectForTransaction.id 
+                        ? { ...p, transactions }
+                        : p
+                    )
+                  );
+                } catch (error) {
+                  console.error('Error reloading transactions:', error);
+                }
+              }
+              setIsTransactionModalOpen(false);
+              setSelectedProjectForTransaction(null);
+            }}
+          />
+        )}
       </main>
     </div>
   );
