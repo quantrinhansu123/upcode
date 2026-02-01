@@ -195,20 +195,14 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onComplet
   const isStarted = (!!task.startedAt || hasActiveSession) && !task.isCompleted;
 
   const totalWorkedMinutes = useMemo(() => {
-    // Tính thời gian từ task sessions (đã kết thúc)
-    let taskMinutes = task.sessions?.reduce((acc, s) => {
-      if (s.endedAt && s.startedAt) {
-        return acc + differenceInMinutes(parseISO(s.endedAt), parseISO(s.startedAt));
-      }
-      return acc;
-    }, 0) || 0;
-
-    // Tính thời gian từ subtask sessions (đã kết thúc)
+    // Chỉ tính thời gian từ subtask sessions (đã kết thúc)
+    // Tổng giờ làm của công việc = tổng giờ của các subtask
     let subtaskMinutes = 0;
     if (subtasks && subtasks.length > 0) {
       subtaskMinutes = subtasks.reduce((acc, subtask) => {
         if (subtask.sessions) {
           const subtaskTime = subtask.sessions.reduce((subAcc, s) => {
+            // Chỉ tính các session đã pause (có endedAt)
             if (s.startedAt && s.endedAt) {
               return subAcc + differenceInMinutes(parseISO(s.endedAt), parseISO(s.startedAt));
             }
@@ -220,9 +214,8 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onComplet
       }, 0);
     }
 
-    // Tổng thời gian = task sessions + subtask sessions
-    return taskMinutes + subtaskMinutes;
-  }, [task.sessions, subtasks]);
+    return subtaskMinutes;
+  }, [subtasks]);
 
   const totalWorked = totalWorkedMinutes > 0
     ? `${Math.floor(totalWorkedMinutes / 60)}h ${totalWorkedMinutes % 60}m`
@@ -1857,7 +1850,7 @@ export default function App() {
         console.log('📦 Loading data in parallel...');
         const [loadedProjects, loadedTasks, loadedTypes, loadedEmployees] = await Promise.allSettled([
           projectService.getAll(),
-          taskService.getAllBasic(), // Use basic version for faster initial load
+          taskService.getAll(), // Load full tasks with subtasks and sessions
           taskTypeService.getAll(),
           employeeService.getAll()
         ]);
@@ -1873,10 +1866,7 @@ export default function App() {
 
         if (loadedTasks.status === 'fulfilled') {
           setTasks(loadedTasks.value);
-          console.log('✅ Tasks loaded (basic):', loadedTasks.value.length);
-          
-          // Load subtasks and sessions in background (only if needed)
-          // This will be loaded on-demand when user expands a task
+          console.log('✅ Tasks loaded (with subtasks):', loadedTasks.value.length);
         } else {
           console.error('❌ Failed to load tasks:', loadedTasks.reason);
           setDbError(`Không thể tải danh sách công việc: ${getErrorMessage(loadedTasks.reason)}`);
@@ -2040,12 +2030,13 @@ export default function App() {
     if (activeProjectId !== 'all') {
       allTasks = allTasks.filter(t => t.projectId === activeProjectId);
     } else {
-      // Trong view tổng quan, chỉ hiển thị các task đang diễn ra
+      // Trong view tổng quan, chỉ hiển thị các task có subtask đang làm
       allTasks = allTasks.filter(t => {
-        // Task đang diễn ra: có startedAt hoặc có session đang chạy
-        const hasActiveSession = t.sessions?.some(s => s.startedAt && !s.endedAt);
-        const hasStarted = !!t.startedAt;
-        return hasActiveSession || hasStarted;
+        // Kiểm tra xem task có subtask nào đang làm không (có active session)
+        const hasSubtaskActive = t.subtasks?.some(subtask => {
+          return subtask.sessions?.some(s => s.startedAt && !s.endedAt);
+        });
+        return hasSubtaskActive || false;
       });
     }
     
@@ -2065,7 +2056,11 @@ export default function App() {
     const categorizedTasks = active.reduce((acc, t) => {
       let status: 'in_progress' | 'paused' | 'new' = 'new';
       const hasActiveSession = t.sessions?.some(s => s.startedAt && !s.endedAt);
-      if (t.startedAt || hasActiveSession) {
+      // Kiểm tra xem có subtask nào đang làm không
+      const hasSubtaskActive = t.subtasks?.some(subtask => {
+        return subtask.sessions?.some(s => s.startedAt && !s.endedAt);
+      });
+      if (t.startedAt || hasActiveSession || hasSubtaskActive) {
         status = 'in_progress';
       } else if (t.sessions && t.sessions.length > 0) {
         status = 'paused';
@@ -2088,9 +2083,11 @@ export default function App() {
     // Filter theo tab đang chọn
     let filteredActive: Task[] = [];
     if (activeStatusTab === 'all') {
-      // Nếu đang ở view "Tất cả dự án", chỉ hiển thị tasks đang làm
+      // Nếu đang ở view "Tất cả dự án", hiển thị tất cả active tasks (đã được filter chỉ còn tasks có subtask đang làm)
       if (activeProjectId === 'all') {
-        filteredActive = categorizedTasks.in_progress;
+        filteredActive = active.sort((a, b) => 
+          new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
+        );
       } else {
         // Nếu chọn project cụ thể, hiển thị tất cả active tasks
         filteredActive = active.sort((a, b) => 
