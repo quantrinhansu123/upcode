@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Search, Trash2, User, QrCode, X, Edit, School, Briefcase, MoreVertical, Eye } from 'lucide-react';
-import { Employee } from '../types';
-import { employeeService } from '../services/databaseService';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Plus, Search, Trash2, User, QrCode, X, Edit, School, Briefcase, MoreVertical, Eye, Clock, DollarSign, ArrowDownCircle } from 'lucide-react';
+import { Employee, Task, Project, ProjectTransaction } from '../types';
+import { employeeService, projectTransactionService } from '../services/databaseService';
+import { differenceInMinutes, parseISO } from 'date-fns';
 
 interface EmployeeModalProps {
     onClose: () => void;
@@ -186,7 +187,105 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ onClose, onSubmit, initia
     );
 };
 
-const EmployeeDetailModal: React.FC<{ employee: Employee; onClose: () => void }> = ({ employee, onClose }) => {
+const EmployeeDetailModal: React.FC<{ 
+    employee: Employee; 
+    onClose: () => void;
+    tasks?: Task[];
+    projects?: Project[];
+}> = ({ employee, onClose, tasks = [], projects = [] }) => {
+    const [expenseTransactions, setExpenseTransactions] = useState<ProjectTransaction[]>([]);
+    const [loadingTransactions, setLoadingTransactions] = useState(false);
+
+    // Load expense transactions for this employee
+    useEffect(() => {
+        const loadExpenses = async () => {
+            setLoadingTransactions(true);
+            try {
+                // Load transactions from all projects where this employee is recipient
+                const allTransactions: ProjectTransaction[] = [];
+                for (const project of projects) {
+                    try {
+                        const transactions = await projectTransactionService.getByProjectId(project.id);
+                        const employeeExpenses = transactions.filter(t => 
+                            t.type === 'expense' && t.recipientId === employee.id
+                        );
+                        allTransactions.push(...employeeExpenses);
+                    } catch (error) {
+                        console.error(`Error loading transactions for project ${project.id}:`, error);
+                    }
+                }
+                setExpenseTransactions(allTransactions);
+            } catch (error) {
+                console.error('Error loading expense transactions:', error);
+            } finally {
+                setLoadingTransactions(false);
+            }
+        };
+        loadExpenses();
+    }, [employee.id, projects]);
+
+    // Calculate total work hours from tasks and subtasks
+    const totalWorkHours = useMemo(() => {
+        let totalMinutes = 0;
+        
+        // From tasks where employee is assignee
+        tasks.forEach(task => {
+            if (task.assigneeId === employee.id && task.sessions) {
+                task.sessions.forEach(session => {
+                    if (session.startedAt && session.endedAt) {
+                        totalMinutes += differenceInMinutes(parseISO(session.endedAt), parseISO(session.startedAt));
+                    }
+                });
+            }
+            
+            // From subtasks where employee is assignee
+            if (task.subtasks) {
+                task.subtasks.forEach(subtask => {
+                    if (subtask.assigneeId === employee.id && subtask.sessions) {
+                        subtask.sessions.forEach(session => {
+                            if (session.startedAt && session.endedAt) {
+                                totalMinutes += differenceInMinutes(parseISO(session.endedAt), parseISO(session.startedAt));
+                            }
+                        });
+                    }
+                });
+            }
+        });
+        
+        return (totalMinutes / 60).toFixed(1);
+    }, [tasks, employee.id]);
+
+    // Calculate total project value (from tasks and subtasks assigned to this employee)
+    const totalProjectValue = useMemo(() => {
+        let total = 0;
+        
+        tasks.forEach(task => {
+            // Task price if employee is assignee
+            if (task.assigneeId === employee.id && task.price) {
+                total += task.price;
+            }
+            
+            // Subtask price if employee is assignee
+            if (task.subtasks) {
+                task.subtasks.forEach(subtask => {
+                    if (subtask.assigneeId === employee.id && subtask.price) {
+                        total += subtask.price;
+                    }
+                });
+            }
+        });
+        
+        return total;
+    }, [tasks, employee.id]);
+
+    // Calculate total expenses
+    const totalExpenses = useMemo(() => {
+        return expenseTransactions.reduce((sum, t) => sum + t.amount, 0);
+    }, [expenseTransactions]);
+
+    const formatCurrency = (amount: number) => {
+        return new Intl.NumberFormat('vi-VN').format(amount);
+    };
     return (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in zoom-in-95 duration-200">
             <div className="bg-white rounded-3xl w-full max-w-sm md:max-w-md p-6 shadow-2xl relative overflow-hidden">
@@ -222,6 +321,66 @@ const EmployeeDetailModal: React.FC<{ employee: Employee; onClose: () => void }>
                                 <p className="font-semibold text-slate-700 truncate" title={employee.email}>{employee.email || '---'}</p>
                             </div>
                         </div>
+
+                        {/* Tổng thời gian làm việc */}
+                        <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-xl">
+                            <div className="flex items-center gap-2 mb-1">
+                                <Clock size={16} className="text-indigo-600" />
+                                <p className="text-indigo-600 text-xs font-medium">Tổng thời gian làm việc</p>
+                            </div>
+                            <p className="text-indigo-700 font-bold text-lg">{totalWorkHours} giờ</p>
+                        </div>
+
+                        {/* Tổng tiền dự án */}
+                        {totalProjectValue > 0 && (
+                            <div className="bg-violet-50 border border-violet-200 p-4 rounded-xl">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <DollarSign size={16} className="text-violet-600" />
+                                    <p className="text-violet-600 text-xs font-medium">Tổng tiền dự án</p>
+                                </div>
+                                <p className="text-violet-700 font-bold text-lg">{formatCurrency(totalProjectValue)} VNĐ</p>
+                            </div>
+                        )}
+
+                        {/* Tổng tiền đã chi */}
+                        <div className="bg-rose-50 border border-rose-200 p-4 rounded-xl">
+                            <div className="flex items-center gap-2 mb-1">
+                                <ArrowDownCircle size={16} className="text-rose-600" />
+                                <p className="text-rose-600 text-xs font-medium">Tổng tiền đã chi</p>
+                            </div>
+                            {loadingTransactions ? (
+                                <p className="text-rose-700 text-sm">Đang tải...</p>
+                            ) : (
+                                <p className="text-rose-700 font-bold text-lg">{formatCurrency(totalExpenses)} VNĐ</p>
+                            )}
+                        </div>
+
+                        {/* Chi tiết các khoản chi */}
+                        {expenseTransactions.length > 0 && (
+                            <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl">
+                                <p className="text-slate-600 text-xs font-medium mb-3">Chi tiết các khoản chi</p>
+                                <div className="space-y-2 max-h-48 overflow-y-auto">
+                                    {expenseTransactions.map(transaction => {
+                                        const project = projects.find(p => p.id === transaction.projectId);
+                                        return (
+                                            <div key={transaction.id} className="bg-white p-2.5 rounded-lg border border-slate-200">
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <span className="text-xs font-semibold text-slate-700">{project?.name || 'Dự án'}</span>
+                                                    <span className="text-xs font-bold text-rose-600">{formatCurrency(transaction.amount)} VNĐ</span>
+                                                </div>
+                                                {transaction.description && (
+                                                    <p className="text-[10px] text-slate-500 truncate">{transaction.description}</p>
+                                                )}
+                                                <p className="text-[10px] text-slate-400 mt-1">
+                                                    {new Date(transaction.transactionDate).toLocaleDateString('vi-VN')}
+                                                </p>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
                         {employee.totalCommission !== undefined && employee.totalCommission > 0 && (
                             <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl">
                                 <p className="text-emerald-600 text-xs mb-1 font-medium">Tổng hoa hồng</p>
@@ -251,7 +410,12 @@ const EmployeeDetailModal: React.FC<{ employee: Employee; onClose: () => void }>
     );
 };
 
-export const EmployeeManager: React.FC = () => {
+interface EmployeeManagerProps {
+    tasks?: Task[];
+    projects?: Project[];
+}
+
+export const EmployeeManager: React.FC<EmployeeManagerProps> = ({ tasks = [], projects = [] }) => {
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingEmployee, setEditingEmployee] = useState<Employee | undefined>(undefined);
@@ -451,6 +615,8 @@ export const EmployeeManager: React.FC = () => {
                 <EmployeeDetailModal
                     employee={viewingEmployee}
                     onClose={() => setViewingEmployee(null)}
+                    tasks={tasks}
+                    projects={projects}
                 />
             )}
         </div>

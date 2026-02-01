@@ -76,6 +76,7 @@ interface TaskItemProps {
   projectName: string;
   isSelected?: boolean;
   onSelect?: (id: string, selected: boolean) => void;
+  employees?: Employee[];
 }
 
 interface ProjectModalProps {
@@ -179,11 +180,14 @@ const SubtaskActiveIndicator: React.FC = () => {
   );
 };
 
-const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onComplete, onStart, onPause, onEdit, onTaskUpdate, projectName, isSelected = false, onSelect }) => {
+const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onComplete, onStart, onPause, onEdit, onTaskUpdate, projectName, isSelected = false, onSelect, employees = [] }) => {
   const [subtasks, setSubtasks] = useState<Subtask[]>(task.subtasks || []);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
+  const [newSubtaskAssigneeId, setNewSubtaskAssigneeId] = useState('');
+  const [newSubtaskPrice, setNewSubtaskPrice] = useState('');
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
 
   const isOverdue = !task.isCompleted && isPast(parseISO(task.deadline)) && !isToday(parseISO(task.deadline));
   // Check if task is running: either has startedAt (legacy) or has an active session (no endedAt)
@@ -191,15 +195,34 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onComplet
   const isStarted = (!!task.startedAt || hasActiveSession) && !task.isCompleted;
 
   const totalWorkedMinutes = useMemo(() => {
-    // Chỉ tính các sessions đã kết thúc (có endedAt)
-    // Không tính session đang chạy vì nó sẽ được hiển thị trong TaskTimer
-    return task.sessions?.reduce((acc, s) => {
+    // Tính thời gian từ task sessions (đã kết thúc)
+    let taskMinutes = task.sessions?.reduce((acc, s) => {
       if (s.endedAt && s.startedAt) {
         return acc + differenceInMinutes(parseISO(s.endedAt), parseISO(s.startedAt));
       }
       return acc;
     }, 0) || 0;
-  }, [task.sessions]);
+
+    // Tính thời gian từ subtask sessions (đã kết thúc)
+    let subtaskMinutes = 0;
+    if (subtasks && subtasks.length > 0) {
+      subtaskMinutes = subtasks.reduce((acc, subtask) => {
+        if (subtask.sessions) {
+          const subtaskTime = subtask.sessions.reduce((subAcc, s) => {
+            if (s.startedAt && s.endedAt) {
+              return subAcc + differenceInMinutes(parseISO(s.endedAt), parseISO(s.startedAt));
+            }
+            return subAcc;
+          }, 0);
+          return acc + subtaskTime;
+        }
+        return acc;
+      }, 0);
+    }
+
+    // Tổng thời gian = task sessions + subtask sessions
+    return taskMinutes + subtaskMinutes;
+  }, [task.sessions, subtasks]);
 
   const totalWorked = totalWorkedMinutes > 0
     ? `${Math.floor(totalWorkedMinutes / 60)}h ${totalWorkedMinutes % 60}m`
@@ -231,14 +254,32 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onComplet
     }
   }, [task.subtasks, task.id]); // Thêm task.id để force update khi task thay đổi
 
+  const formatPrice = (value: string) => {
+    const numbers = value.replace(/\D/g, '');
+    return numbers.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  };
+
+  const parsePrice = (value: string): number | undefined => {
+    const numbers = value.replace(/\D/g, '');
+    return numbers ? Number(numbers) : undefined;
+  };
+
   const handleAddSubtask = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!newSubtaskTitle.trim()) return;
 
     try {
-      const newSubtask = await subtaskService.create(task.id, newSubtaskTitle.trim());
+      const price = parsePrice(newSubtaskPrice);
+      const newSubtask = await subtaskService.create(
+        task.id, 
+        newSubtaskTitle.trim(),
+        newSubtaskAssigneeId || undefined,
+        price
+      );
       setSubtasks([...subtasks, newSubtask]);
       setNewSubtaskTitle('');
+      setNewSubtaskAssigneeId('');
+      setNewSubtaskPrice('');
       setIsAddingSubtask(false);
       
       // Update parent task
@@ -258,6 +299,23 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onComplet
       } else {
         alert(`Không thể thêm subtask: ${errorMessage}\n\nVui lòng kiểm tra Console (F12) để xem chi tiết lỗi.`);
       }
+    }
+  };
+
+  const handleUpdateSubtask = async (subtaskId: string, updates: { assigneeId?: string; price?: number }) => {
+    try {
+      const updatedSubtask = await subtaskService.update(subtaskId, updates);
+      setSubtasks(subtasks.map(s => s.id === subtaskId ? updatedSubtask : s));
+      setEditingSubtaskId(null);
+      
+      // Update parent task
+      const updatedTask = await taskService.getById(task.id);
+      if (updatedTask) {
+        onTaskUpdate(updatedTask);
+      }
+    } catch (error: any) {
+      console.error('Error updating subtask:', error);
+      alert('Không thể cập nhật subtask');
     }
   };
 
@@ -402,15 +460,11 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onComplet
               }`}>
               {task.priority}
             </span>
-            {/* Show total hours from subtasks if available, otherwise show task timer */}
-            {totalSubtaskHours > 0 ? (
-              <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
-                {totalSubtaskHours.toFixed(1)}h
-              </span>
-            ) : isStarted && task.startedAt ? (
+            {/* Show total worked time (includes both task sessions and subtask sessions) */}
+            {isStarted && task.startedAt ? (
               <TaskTimer startedAt={task.startedAt} sessions={task.sessions} />
             ) : totalWorked ? (
-              <span className="text-xs font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+              <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
                 {totalWorked}
               </span>
             ) : null}
@@ -462,7 +516,7 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onComplet
                 : null;
 
               return (
-                <div key={subtask.id} className="flex items-center gap-2 group/subtask py-1 px-1.5 rounded hover:bg-slate-50 transition-colors">
+                <div key={subtask.id} className="relative flex items-center gap-2 group/subtask py-1 px-1.5 rounded hover:bg-slate-50 transition-colors">
                   <button
                     onClick={() => handleToggleSubtask(subtask.id)}
                     className={`flex-shrink-0 w-3.5 h-3.5 rounded border-2 flex items-center justify-center transition-all ${
@@ -483,6 +537,28 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onComplet
                     >
                       {subtask.title}
                     </span>
+                    
+                    {/* Hiển thị nhân sự */}
+                    {subtask.assignee && (
+                      <div className="flex items-center gap-1 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 flex-shrink-0">
+                        {subtask.assignee.avatarUrl ? (
+                          <img src={subtask.assignee.avatarUrl} className="w-3 h-3 rounded-full object-cover" />
+                        ) : (
+                          <Users size={10} className="text-indigo-600" />
+                        )}
+                        <span className="text-[10px] text-indigo-700 max-w-[60px] truncate">{subtask.assignee.fullName}</span>
+                      </div>
+                    )}
+                    
+                    {/* Hiển thị tiền */}
+                    {subtask.price && subtask.price > 0 && (
+                      <div className="flex items-center gap-0.5 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 flex-shrink-0">
+                        <DollarSign size={10} className="text-emerald-600" />
+                        <span className="text-[10px] font-semibold text-emerald-700">
+                          {new Intl.NumberFormat('vi-VN').format(subtask.price)}
+                        </span>
+                      </div>
+                    )}
                     
                     {/* Hiển thị thời gian cạnh tên subtask */}
                     {!subtask.isCompleted && (
@@ -525,13 +601,60 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onComplet
                   )}
                   
                   {!task.isCompleted && (
-                    <button
-                      onClick={() => handleDeleteSubtask(subtask.id)}
-                      className="opacity-0 group-hover/subtask:opacity-100 p-0.5 text-slate-400 hover:text-rose-500 transition-all"
-                      title="Xóa"
-                    >
-                      <X size={12} />
-                    </button>
+                    <>
+                      <button
+                        onClick={() => setEditingSubtaskId(editingSubtaskId === subtask.id ? null : subtask.id)}
+                        className="opacity-0 group-hover/subtask:opacity-100 p-0.5 text-slate-400 hover:text-indigo-500 transition-all"
+                        title="Sửa"
+                      >
+                        <Pencil size={12} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteSubtask(subtask.id)}
+                        className="opacity-0 group-hover/subtask:opacity-100 p-0.5 text-slate-400 hover:text-rose-500 transition-all"
+                        title="Xóa"
+                      >
+                        <X size={12} />
+                      </button>
+                    </>
+                  )}
+                  {editingSubtaskId === subtask.id && (
+                    <div className="absolute top-full left-0 mt-1 p-2 bg-white border border-slate-200 rounded-lg shadow-lg z-10 min-w-[200px]">
+                      <div className="space-y-2">
+                        <div>
+                          <label className="text-[10px] text-slate-600 mb-1 block">Nhân sự</label>
+                          <select
+                            value={subtask.assigneeId || ''}
+                            onChange={(e) => handleUpdateSubtask(subtask.id, { assigneeId: e.target.value || undefined })}
+                            className="w-full px-2 py-1 text-xs border border-slate-300 rounded-md focus:outline-none"
+                          >
+                            <option value="">-- Chọn nhân sự --</option>
+                            {employees.map(emp => (
+                              <option key={emp.id} value={emp.id}>{emp.fullName}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-600 mb-1 block">Giá (VNĐ)</label>
+                          <input
+                            type="text"
+                            value={subtask.price ? formatPrice(subtask.price.toString()) : ''}
+                            onChange={(e) => {
+                              const price = parsePrice(e.target.value);
+                              handleUpdateSubtask(subtask.id, { price });
+                            }}
+                            placeholder="Nhập giá..."
+                            className="w-full px-2 py-1 text-xs border border-slate-300 rounded-md focus:outline-none"
+                          />
+                        </div>
+                        <button
+                          onClick={() => setEditingSubtaskId(null)}
+                          className="w-full px-2 py-1 text-xs bg-slate-100 hover:bg-slate-200 rounded transition-colors"
+                        >
+                          Đóng
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </div>
               );
@@ -540,34 +663,54 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onComplet
             {!task.isCompleted && (
               <div className="flex items-center gap-2">
                 {isAddingSubtask ? (
-                  <form onSubmit={handleAddSubtask} className="flex items-center gap-2 flex-1">
+                  <form onSubmit={handleAddSubtask} className="flex flex-col gap-2 flex-1 p-2 bg-slate-50 rounded-lg border border-slate-200">
                     <input
                       type="text"
                       value={newSubtaskTitle}
                       onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                      onBlur={() => {
-                        if (!newSubtaskTitle.trim()) setIsAddingSubtask(false);
-                      }}
                       placeholder="Nhập tên subtask..."
-                      className="flex-1 px-2 py-1 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      className="px-2 py-1 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                       autoFocus
                     />
-                    <button
-                      type="submit"
-                      className="p-1 text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
-                    >
-                      <CheckCircle size={16} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsAddingSubtask(false);
-                        setNewSubtaskTitle('');
-                      }}
-                      className="p-1 text-slate-400 hover:bg-slate-100 rounded transition-colors"
-                    >
-                      <X size={16} />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={newSubtaskAssigneeId}
+                        onChange={(e) => setNewSubtaskAssigneeId(e.target.value)}
+                        className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      >
+                        <option value="">-- Chọn nhân sự --</option>
+                        {employees.map(emp => (
+                          <option key={emp.id} value={emp.id}>{emp.fullName}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        value={newSubtaskPrice}
+                        onChange={(e) => setNewSubtaskPrice(formatPrice(e.target.value))}
+                        placeholder="Giá (VNĐ)..."
+                        className="w-24 px-2 py-1 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="submit"
+                        className="p-1 text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
+                      >
+                        <CheckCircle size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAddingSubtask(false);
+                          setNewSubtaskTitle('');
+                          setNewSubtaskAssigneeId('');
+                          setNewSubtaskPrice('');
+                        }}
+                        className="p-1 text-slate-400 hover:bg-slate-100 rounded transition-colors"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
                   </form>
                 ) : (
                   <button
@@ -638,32 +781,17 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onComplet
             <CreditCard size={16} />
           </button>
         )}
-        {!task.isCompleted && (
-          <>
-            {isStarted ? (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onPause(task.id);
-                }}
-                className="flex items-center gap-1 px-2 py-1 text-amber-600 hover:text-white hover:bg-amber-600 border border-amber-600 transition-all rounded text-xs font-medium"
-                title="Tạm dừng"
-              >
-                <Pause size={14} />
-              </button>
-            ) : (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onStart(task.id);
-                }}
-                className="flex items-center gap-1 px-2 py-1 text-indigo-600 hover:text-white hover:bg-indigo-600 border border-indigo-600 transition-all rounded text-xs font-medium"
-                title={totalWorked ? 'Tiếp tục' : 'Bắt đầu'}
-              >
-                <Play size={14} />
-              </button>
-            )}
-          </>
+        {!task.isCompleted && isStarted && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onPause(task.id);
+            }}
+            className="flex items-center gap-1 px-2 py-1 text-amber-600 hover:text-white hover:bg-amber-600 border border-amber-600 transition-all rounded text-xs font-medium"
+            title="Tạm dừng"
+          >
+            <Pause size={14} />
+          </button>
         )}
         {!task.isCompleted && (
           <button
@@ -1659,6 +1787,7 @@ export default function App() {
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [selectedProjectForTransaction, setSelectedProjectForTransaction] = useState<Project | null>(null);
+  const [projectSearchQuery, setProjectSearchQuery] = useState('');
 
   // Monitor online/offline status and sync pending actions
   useEffect(() => {
@@ -2467,85 +2596,161 @@ export default function App() {
                 <Plus size={14} />
               </button>
             </div>
-            <div className="flex flex-col gap-1">
-              {projects.map(p => (
-                <div key={p.id} className="group flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-slate-50 transition-all cursor-pointer">
+            {/* Search bar for projects */}
+            <div className="px-2 mb-3">
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                <input
+                  type="text"
+                  placeholder="Tìm dự án..."
+                  value={projectSearchQuery}
+                  onChange={(e) => setProjectSearchQuery(e.target.value)}
+                  className="w-full pl-8 pr-2 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                />
+                {projectSearchQuery && (
                   <button
-                    onClick={() => { setActiveView('dashboard'); setActiveProjectId(p.id); }}
-                    className={`flex-1 flex flex-col gap-1 text-left min-w-0 ${activeProjectId === p.id && activeView === 'dashboard' ? 'text-indigo-700 font-medium' : 'text-slate-600'}`}
+                    onClick={() => setProjectSearchQuery('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                   >
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
-                      <div className="flex-1 min-w-0">
-                        <div className="truncate text-xs">{p.name}</div>
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+            </div>
+            {/* Filtered projects as cards */}
+            {(() => {
+              const filteredProjects = projects.filter(p => 
+                p.name.toLowerCase().includes(projectSearchQuery.toLowerCase()) ||
+                (p.description && p.description.toLowerCase().includes(projectSearchQuery.toLowerCase()))
+              );
+              
+              if (filteredProjects.length === 0 && projectSearchQuery) {
+                return (
+                  <div className="px-2 py-4 text-center text-xs text-slate-400">
+                    Không tìm thấy dự án nào
+                  </div>
+                );
+              }
+              
+              return (
+                <div className="grid grid-cols-1 gap-2 px-2">
+                  {filteredProjects.map(p => {
+                    const pTasks = tasks.filter(t => t.projectId === p.id);
+                    const total = pTasks.length;
+                    const completed = pTasks.filter(t => t.isCompleted).length;
+                    const percent = total > 0 ? (completed / total) * 100 : 0;
+                    const totalIncome = p.transactions?.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0) || 0;
+                    const totalExpense = p.transactions?.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0) || 0;
+                    const balance = totalIncome - totalExpense;
+                    
+                    return (
+                      <div
+                        key={p.id}
+                        className={`group relative p-3 rounded-xl border-2 transition-all cursor-pointer hover:shadow-md ${
+                          activeProjectId === p.id && activeView === 'dashboard'
+                            ? 'bg-indigo-50 border-indigo-300 shadow-sm'
+                            : 'bg-white border-slate-200 hover:border-indigo-200'
+                        }`}
+                        onClick={() => { setActiveView('dashboard'); setActiveProjectId(p.id); }}
+                      >
+                        {/* Project header */}
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <div className="w-2 h-2 rounded-full shrink-0 mt-1" style={{ backgroundColor: p.color }} />
+                            <div className="flex-1 min-w-0">
+                              <h4 className={`text-sm font-semibold truncate ${
+                                activeProjectId === p.id && activeView === 'dashboard' ? 'text-indigo-700' : 'text-slate-700'
+                              }`}>
+                                {p.name}
+                              </h4>
+                              {p.description && (
+                                <p className="text-[10px] text-slate-500 mt-0.5 line-clamp-1">{p.description}</p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all shrink-0">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedProjectForTransaction(p);
+                                setIsTransactionModalOpen(true);
+                              }}
+                              className="p-1 text-slate-400 hover:text-emerald-500 transition-all"
+                              title="Thu chi"
+                            >
+                              <DollarSign size={12} />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditProject(p);
+                              }}
+                              className="p-1 text-slate-400 hover:text-indigo-500 transition-all"
+                              title="Sửa"
+                            >
+                              <Pencil size={12} />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteProject(p.id);
+                              }}
+                              className="p-1 text-slate-400 hover:text-red-500 transition-all"
+                              title="Xóa"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        </div>
+                        
+                        {/* Progress bar */}
+                        {total > 0 && (
+                          <div className="mb-2">
+                            <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all duration-500"
+                                style={{
+                                  width: `${percent}%`,
+                                  backgroundColor: percent === 100 ? '#10b981' : p.color
+                                }}
+                              />
+                            </div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">
+                              {completed}/{total} công việc
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Financial info */}
+                        <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-slate-100">
+                          {p.price && p.price > 0 && (
+                            <div className="text-[10px]">
+                              <div className="text-slate-500">Giá dự án</div>
+                              <div className="font-semibold text-violet-600">
+                                {new Intl.NumberFormat('vi-VN').format(p.price)} VNĐ
+                              </div>
+                            </div>
+                          )}
+                          <div className="text-[10px]">
+                            <div className="text-slate-500">Số dư</div>
+                            <div className={`font-semibold ${balance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                              {new Intl.NumberFormat('vi-VN').format(balance)} VNĐ
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Created date */}
                         {p.createdAt && (
-                          <div className="text-[10px] text-slate-400 mt-0.5">
+                          <div className="text-[9px] text-slate-400 mt-1.5">
                             {format(parseISO(p.createdAt), 'dd/MM/yyyy', { locale: vi })}
                           </div>
                         )}
                       </div>
-                      {(() => {
-                        const totalIncome = p.transactions?.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0) || 0;
-                        const totalExpense = p.transactions?.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0) || 0;
-                        const balance = totalIncome - totalExpense;
-                        return balance !== 0 ? (
-                          <span className={`text-[10px] font-semibold shrink-0 ${balance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                            {new Intl.NumberFormat('vi-VN').format(balance)}
-                          </span>
-                        ) : null;
-                      })()}
-                    </div>
-                    {(() => {
-                      const pTasks = tasks.filter(t => t.projectId === p.id);
-                      const total = pTasks.length;
-                      const completed = pTasks.filter(t => t.isCompleted).length;
-                      const percent = total > 0 ? (completed / total) * 100 : 0;
-
-                      return total > 0 ? (
-                        <div className="ml-3.5 mr-1">
-                          <div className="h-0.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                            <div
-                              className="h-full rounded-full transition-all duration-500"
-                              style={{
-                                width: `${percent}%`,
-                                backgroundColor: percent === 100 ? '#10b981' : p.color
-                              }}
-                            />
-                          </div>
-                        </div>
-                      ) : null;
-                    })()}
-                  </button>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedProjectForTransaction(p);
-                        setIsTransactionModalOpen(true);
-                      }}
-                      className="p-0.5 text-slate-400 hover:text-emerald-500 transition-all"
-                      title="Thu chi"
-                    >
-                      <DollarSign size={12} />
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleEditProject(p); }}
-                      className="p-0.5 text-slate-400 hover:text-indigo-500 transition-all"
-                      title="Sửa"
-                    >
-                      <Pencil size={12} />
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); deleteProject(p.id); }}
-                      className="p-0.5 text-slate-400 hover:text-red-500 transition-all"
-                      title="Xóa"
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
+              );
+            })()}
           </div>
         </nav>
       </aside>
@@ -2606,8 +2811,27 @@ export default function App() {
                   return new Intl.NumberFormat('vi-VN').format(amount);
                 };
 
+                // Tính tỷ lệ tiến độ thu tiền
+                const paymentProgress = activeProject.price && activeProject.price > 0 
+                  ? Math.min((totalIncome / activeProject.price) * 100, 100) 
+                  : 0;
+
                 return (
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-3">
+                      {activeProject.price && activeProject.price > 0 && (
+                        <div className="px-4 py-2.5 bg-violet-50 rounded-xl border-2 border-violet-200 shadow-sm">
+                          <div className="flex flex-col items-center gap-1">
+                            <div className="flex items-center gap-1.5">
+                              <DollarSign size={16} className="text-violet-600" />
+                              <span className="text-sm font-black text-violet-700 uppercase tracking-wide">Giá dự án</span>
+                            </div>
+                            <div className="text-sm font-black text-violet-600 mt-0.5">
+                              {formatCurrency(activeProject.price)} VNĐ
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     <div className="px-4 py-2.5 bg-emerald-50 rounded-xl border-2 border-emerald-200 shadow-sm">
                       <div className="flex flex-col items-center gap-1">
                         <div className="flex items-center gap-1.5">
@@ -2641,16 +2865,48 @@ export default function App() {
                         </div>
                       </div>
                     </div>
-                    <button
-                      onClick={() => {
-                        setSelectedProjectForTransaction(activeProject);
-                        setIsTransactionModalOpen(true);
-                      }}
-                      className="px-3 py-2.5 bg-indigo-600 text-white text-xs font-black rounded-xl hover:bg-indigo-700 transition-all flex items-center gap-1.5 shadow-md"
-                    >
-                      <DollarSign size={14} />
-                      Thu chi
-                    </button>
+                      <button
+                        onClick={() => {
+                          setSelectedProjectForTransaction(activeProject);
+                          setIsTransactionModalOpen(true);
+                        }}
+                        className="px-3 py-2.5 bg-indigo-600 text-white text-xs font-black rounded-xl hover:bg-indigo-700 transition-all flex items-center gap-1.5 shadow-md"
+                      >
+                        <DollarSign size={14} />
+                        Thu chi
+                      </button>
+                    </div>
+                    {/* Thanh tiến độ thu tiền */}
+                    {activeProject.price && activeProject.price > 0 && (
+                      <div className="px-4 py-3 bg-gradient-to-r from-emerald-50 to-violet-50 rounded-xl border-2 border-emerald-200/50 shadow-sm">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <ArrowUpCircle size={16} className="text-emerald-600" />
+                            <span className="text-sm font-bold text-slate-700">Tiến độ thu tiền</span>
+                          </div>
+                          <span className="text-sm font-black text-emerald-600">
+                            {paymentProgress.toFixed(1)}%
+                          </span>
+                        </div>
+                        <div className="w-full h-3 bg-slate-200 rounded-full overflow-hidden shadow-inner">
+                          <div
+                            className="h-full bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-full transition-all duration-500 ease-out flex items-center justify-end pr-1"
+                            style={{ width: `${paymentProgress}%` }}
+                          >
+                            {paymentProgress > 10 && (
+                              <span className="text-[10px] font-bold text-white">
+                                {formatCurrency(totalIncome)} / {formatCurrency(activeProject.price)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {paymentProgress <= 10 && (
+                          <div className="mt-1 text-xs text-slate-600 text-right">
+                            {formatCurrency(totalIncome)} / {formatCurrency(activeProject.price)} VNĐ
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })()}
@@ -2858,6 +3114,7 @@ export default function App() {
                             projectName={projects.find(p => p.id === task.projectId)?.name || ''}
                             isSelected={selectedTasks.has(task.id)}
                             onSelect={handleSelectTask}
+                            employees={employees}
                           />
                         ))}
                         
@@ -2885,6 +3142,7 @@ export default function App() {
                                   projectName={projects.find(p => p.id === task.projectId)?.name || ''}
                                   isSelected={selectedTasks.has(task.id)}
                                   onSelect={handleSelectTask}
+                                  employees={employees}
                                 />
                               ))}
                             </div>
@@ -3041,7 +3299,7 @@ export default function App() {
           <BaoGiaView />
         ) : (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <EmployeeManager />
+            <EmployeeManager tasks={tasks} projects={projects} />
           </div>
         )}
 

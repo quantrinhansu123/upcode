@@ -20,6 +20,9 @@ export interface Subtask {
   completedAt?: string;
   createdAt?: string;
   sessions?: SubtaskWorkSession[];
+  assigneeId?: string; // Người phụ trách
+  assignee?: Employee; // Thông tin người phụ trách
+  price?: number; // Giá của subtask
 }
 
 export interface TaskPayment {

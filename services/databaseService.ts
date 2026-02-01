@@ -1,5 +1,5 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient';
-import { getErrorMessage, isNetworkError } from '../utils/errorHandler';
+import { getErrorMessage, isNetworkError, retryWithBackoff } from '../utils/errorHandler';
 import type { Project, Task, Employee, TaskType, Subtask, TaskAssignee, TaskPayment, ProjectTransaction } from '../types';
 
 // Helper functions to convert between database and app formats
@@ -62,7 +62,10 @@ const dbSubtaskToApp = (dbSubtask: any): Subtask => {
         isCompleted: dbSubtask.is_completed,
         completedAt: dbSubtask.completed_at,
         createdAt: dbSubtask.created_at,
-        sessions: sessions // Luôn trả về mảng, không phải undefined
+        sessions: sessions, // Luôn trả về mảng, không phải undefined
+        assigneeId: dbSubtask.assignee_id || undefined,
+        assignee: dbSubtask.employees ? dbEmployeeToApp(dbSubtask.employees) : undefined,
+        price: dbSubtask.price ? Number(dbSubtask.price) : undefined
     };
 };
 
@@ -285,10 +288,10 @@ export const taskService = {
     // Get all tasks (full - with subtasks and sessions, slower)
     async getAll(): Promise<Task[]> {
         try {
-            // Try fetching with all relations (including employees/assignees, task_assignees with commission, and subtasks with sessions)
+            // Try fetching with all relations (including employees/assignees, task_assignees with commission, and subtasks with sessions and employees)
             let { data, error } = await supabase
                 .from('tasks')
-                .select('*, work_sessions(*), employees(*), task_assignees(*, employees(*)), subtasks(*, subtask_work_sessions(*))')
+                .select('*, work_sessions(*), employees(*), task_assignees(*, employees(*)), subtasks(*, subtask_work_sessions(*), employees(*))')
                 .order('created_at', { ascending: false });
 
             // Fallback: If relationship fails (e.g., migration not run), fetch without employees
@@ -296,7 +299,7 @@ export const taskService = {
                 console.warn('⚠️ Fetching tasks with assignees failed. Retrying without assignees...', error.message);
                 const retry = await supabase
                     .from('tasks')
-                    .select('*, work_sessions(*), subtasks(*, subtask_work_sessions(*))')
+                    .select('*, work_sessions(*), subtasks(*, subtask_work_sessions(*), employees(*))')
                     .order('created_at', { ascending: false });
 
                 data = retry.data;
@@ -308,7 +311,7 @@ export const taskService = {
                 console.warn('⚠️ Fetching tasks with work_sessions failed. Retrying with basic fields...', error.message);
                 const basicRetry = await supabase
                     .from('tasks')
-                    .select('*, subtasks(*, subtask_work_sessions(*))')
+                    .select('*, subtasks(*, subtask_work_sessions(*), employees(*))')
                     .order('created_at', { ascending: false });
 
                 if (basicRetry.error) {
@@ -352,7 +355,7 @@ export const taskService = {
     async getById(id: string): Promise<Task | null> {
         let { data, error } = await supabase
             .from('tasks')
-            .select('*, work_sessions(*), employees(*), task_assignees(*, employees(*)), subtasks(*, subtask_work_sessions(*)), task_payments(*)')
+            .select('*, work_sessions(*), employees(*), task_assignees(*, employees(*)), subtasks(*, subtask_work_sessions(*), employees(*)), task_payments(*)')
             .eq('id', id)
             .single();
 
@@ -360,7 +363,7 @@ export const taskService = {
             // Fallback attempt without employees
             const retry = await supabase
                 .from('tasks')
-                .select('*, work_sessions(*), subtasks(*, subtask_work_sessions(*))')
+                .select('*, work_sessions(*), subtasks(*, subtask_work_sessions(*), employees(*))')
                 .eq('id', id)
                 .single();
 
@@ -371,7 +374,7 @@ export const taskService = {
                 // Final fallback without work_sessions
                 const finalRetry = await supabase
                     .from('tasks')
-                    .select('*, subtasks(*, subtask_work_sessions(*))')
+                    .select('*, subtasks(*, subtask_work_sessions(*), employees(*))')
                     .eq('id', id)
                     .single();
 
@@ -406,34 +409,41 @@ export const taskService = {
             price: task.price || null
         };
 
-        const { data, error } = await supabase
-            .from('tasks')
-            .insert(insertData)
-            .select()
-            .single();
+        return retryWithBackoff(async () => {
+            const { data, error } = await supabase
+                .from('tasks')
+                .insert(insertData)
+                .select()
+                .single();
 
-        if (error) {
-            console.error('Error creating task:', error);
-            console.error('Error details:', {
-                message: error.message,
-                details: error.details,
-                hint: error.hint,
-                code: error.code,
-                insertData
-            });
-            throw error;
-        }
+            if (error) {
+                console.error('Error creating task:', error);
+                console.error('Error details:', {
+                    message: error.message,
+                    details: error.details,
+                    hint: error.hint,
+                    code: error.code,
+                    insertData
+                });
+                
+                // Normalize network errors
+                if (isNetworkError(error)) {
+                    throw new Error(getErrorMessage(error));
+                }
+                throw error;
+            }
 
-        const createdTask = dbTaskToApp(data);
+            const createdTask = dbTaskToApp(data);
 
-        // Create task_assignees if provided
-        if (task.assignees && task.assignees.length > 0) {
-            await this.setTaskAssignees(createdTask.id, task.assignees);
-            // Reload task with assignees
-            return this.getById(createdTask.id) as Promise<Task>;
-        }
+            // Create task_assignees if provided
+            if (task.assignees && task.assignees.length > 0) {
+                await this.setTaskAssignees(createdTask.id, task.assignees);
+                // Reload task with assignees
+                return this.getById(createdTask.id) as Promise<Task>;
+            }
 
-        return createdTask;
+            return createdTask;
+        });
     },
 
     // Update task
@@ -841,13 +851,14 @@ export const taskTypeService = {
 // ============ SUBTASK OPERATIONS ============
 
 export const subtaskService = {
-    // Get all subtasks for a task (with work sessions)
+    // Get all subtasks for a task (with work sessions, assignee, and price)
     async getByTaskId(taskId: string): Promise<Subtask[]> {
         const { data, error } = await supabase
             .from('subtasks')
             .select(`
                 *,
-                subtask_work_sessions (*)
+                subtask_work_sessions (*),
+                employees (*)
             `)
             .eq('task_id', taskId)
             .order('created_at', { ascending: true });
@@ -861,15 +872,17 @@ export const subtaskService = {
     },
 
     // Create new subtask
-    async create(taskId: string, title: string): Promise<Subtask> {
+    async create(taskId: string, title: string, assigneeId?: string, price?: number): Promise<Subtask> {
         const { data, error } = await supabase
             .from('subtasks')
             .insert({
                 task_id: taskId,
                 title: title,
-                is_completed: false
+                is_completed: false,
+                assignee_id: assigneeId || null,
+                price: price || null
             })
-            .select()
+            .select('*, employees(*)')
             .single();
 
         if (error) {
@@ -882,34 +895,42 @@ export const subtaskService = {
 
     // Toggle subtask completion
     async toggleComplete(id: string): Promise<Subtask> {
-        // Get current state
-        const { data: current, error: fetchError } = await supabase
-            .from('subtasks')
-            .select('*')
-            .eq('id', id)
-            .single();
+        return retryWithBackoff(async () => {
+            // Get current state
+            const { data: current, error: fetchError } = await supabase
+                .from('subtasks')
+                .select('*')
+                .eq('id', id)
+                .single();
 
-        if (fetchError) {
-            console.error('Error fetching subtask:', fetchError);
-            throw fetchError;
-        }
+            if (fetchError) {
+                console.error('Error fetching subtask:', fetchError);
+                if (isNetworkError(fetchError)) {
+                    throw new Error(getErrorMessage(fetchError));
+                }
+                throw fetchError;
+            }
 
-        // Toggle completion
-        const { data, error } = await supabase
-            .from('subtasks')
-            .update({
-                is_completed: !current.is_completed
-            })
-            .eq('id', id)
-            .select()
-            .single();
+            // Toggle completion
+            const { data, error } = await supabase
+                .from('subtasks')
+                .update({
+                    is_completed: !current.is_completed
+                })
+                .eq('id', id)
+                .select('*, subtask_work_sessions(*), employees(*)')
+                .single();
 
-        if (error) {
-            console.error('Error updating subtask:', error);
-            throw error;
-        }
+            if (error) {
+                console.error('Error updating subtask:', error);
+                if (isNetworkError(error)) {
+                    throw new Error(getErrorMessage(error));
+                }
+                throw error;
+            }
 
-        return dbSubtaskToApp(data);
+            return dbSubtaskToApp(data);
+        });
     },
 
     // Delete subtask
@@ -925,105 +946,137 @@ export const subtaskService = {
         }
     },
 
-    // Update subtask title
-    async update(id: string, title: string): Promise<Subtask> {
-        const { data, error } = await supabase
-            .from('subtasks')
-            .update({ title })
-            .eq('id', id)
-            .select(`
-                *,
-                subtask_work_sessions (*)
-            `)
-            .single();
+    // Update subtask
+    async update(id: string, updates: { title?: string; assigneeId?: string; price?: number }): Promise<Subtask> {
+        return retryWithBackoff(async () => {
+            const dbUpdates: any = {};
+            if (updates.title !== undefined) dbUpdates.title = updates.title;
+            if (updates.assigneeId !== undefined) dbUpdates.assignee_id = updates.assigneeId || null;
+            if (updates.price !== undefined) dbUpdates.price = updates.price || null;
 
-        if (error) {
-            console.error('Error updating subtask:', error);
-            throw error;
-        }
+            const { data, error } = await supabase
+                .from('subtasks')
+                .update(dbUpdates)
+                .eq('id', id)
+                .select(`
+                    *,
+                    subtask_work_sessions (*),
+                    employees (*)
+                `)
+                .single();
 
-        return dbSubtaskToApp(data);
+            if (error) {
+                console.error('Error updating subtask:', error);
+                if (isNetworkError(error)) {
+                    throw new Error(getErrorMessage(error));
+                }
+                throw error;
+            }
+
+            return dbSubtaskToApp(data);
+        });
     },
 
     // Start work session for subtask
     async startSession(subtaskId: string): Promise<Subtask> {
-        // Create new session
-        const { error: sessionError } = await supabase
-            .from('subtask_work_sessions')
-            .insert({
-                subtask_id: subtaskId,
-                started_at: new Date().toISOString()
-            });
+        return retryWithBackoff(async () => {
+            // Create new session
+            const { error: sessionError } = await supabase
+                .from('subtask_work_sessions')
+                .insert({
+                    subtask_id: subtaskId,
+                    started_at: new Date().toISOString()
+                });
 
-        if (sessionError) {
-            console.error('Error starting subtask session:', sessionError);
-            throw sessionError;
-        }
+            if (sessionError) {
+                console.error('Error starting subtask session:', sessionError);
+                if (isNetworkError(sessionError)) {
+                    throw new Error(getErrorMessage(sessionError));
+                }
+                throw sessionError;
+            }
 
-        // Get updated subtask with sessions
-        const { data, error } = await supabase
-            .from('subtasks')
-            .select(`
-                *,
-                subtask_work_sessions (*)
-            `)
-            .eq('id', subtaskId)
-            .single();
+            // Get updated subtask with sessions
+            const { data, error } = await supabase
+                .from('subtasks')
+                .select(`
+                    *,
+                    subtask_work_sessions (*),
+                    employees (*)
+                `)
+                .eq('id', subtaskId)
+                .single();
 
-        if (error) {
-            console.error('Error fetching subtask:', error);
-            throw error;
-        }
+            if (error) {
+                console.error('Error fetching subtask:', error);
+                if (isNetworkError(error)) {
+                    throw new Error(getErrorMessage(error));
+                }
+                throw error;
+            }
 
-        return dbSubtaskToApp(data);
+            return dbSubtaskToApp(data);
+        });
     },
 
     // Pause work session for subtask
     async pauseSession(subtaskId: string): Promise<Subtask> {
-        // Find active session (no ended_at)
-        const { data: activeSession, error: findError } = await supabase
-            .from('subtask_work_sessions')
-            .select('*')
-            .eq('subtask_id', subtaskId)
-            .is('ended_at', null)
-            .order('started_at', { ascending: false })
-            .limit(1)
-            .single();
-
-        if (findError && findError.code !== 'PGRST116') { // PGRST116 = no rows returned
-            console.error('Error finding active session:', findError);
-            throw findError;
-        }
-
-        if (activeSession) {
-            // End the active session
-            const { error: updateError } = await supabase
+        return retryWithBackoff(async () => {
+            // Find active session (no ended_at)
+            const { data: activeSession, error: findError } = await supabase
                 .from('subtask_work_sessions')
-                .update({ ended_at: new Date().toISOString() })
-                .eq('id', activeSession.id);
+                .select('*')
+                .eq('subtask_id', subtaskId)
+                .is('ended_at', null)
+                .order('started_at', { ascending: false })
+                .limit(1)
+                .single();
 
-            if (updateError) {
-                console.error('Error pausing subtask session:', updateError);
-                throw updateError;
+            if (findError && findError.code !== 'PGRST116') { // PGRST116 = no rows returned
+                console.error('Error finding active session:', findError);
+                if (isNetworkError(findError)) {
+                    throw new Error(getErrorMessage(findError));
+                }
+                throw findError;
             }
-        }
 
-        // Get updated subtask with sessions
-        const { data, error } = await supabase
-            .from('subtasks')
-            .select(`
-                *,
-                subtask_work_sessions (*)
-            `)
-            .eq('id', subtaskId)
-            .single();
+            if (activeSession) {
+                // End the active session
+                const { error: updateError } = await supabase
+                    .from('subtask_work_sessions')
+                    .update({ ended_at: new Date().toISOString() })
+                    .eq('id', activeSession.id);
 
-        if (error) {
-            console.error('Error fetching subtask:', error);
-            throw error;
-        }
+                if (updateError) {
+                    console.error('Error pausing subtask session:', updateError);
+                    if (isNetworkError(updateError)) {
+                        throw new Error(getErrorMessage(updateError));
+                    }
+                    throw updateError;
+                }
+            }
 
-        return dbSubtaskToApp(data);
+            // Get updated subtask with sessions
+            const { data, error } = await supabase
+                .from('subtasks')
+                .select(`
+                    *,
+                    subtask_work_sessions (*),
+                    employees (*)
+                `)
+                .eq('id', subtaskId)
+                .single();
+
+            if (error) {
+                console.error('Error fetching subtask:', error);
+                if (isNetworkError(error)) {
+                    throw new Error(getErrorMessage(error));
+                }
+                throw error;
+            }
+
+            return dbSubtaskToApp(data);
+        });
     },
 
     // Get subtask by ID with sessions
@@ -1032,7 +1085,8 @@ export const subtaskService = {
             .from('subtasks')
             .select(`
                 *,
-                subtask_work_sessions (*)
+                subtask_work_sessions (*),
+                employees (*)
             `)
             .eq('id', id)
             .single();
