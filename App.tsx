@@ -1929,7 +1929,44 @@ export default function App() {
     };
 
     loadProjectTransactions();
-  }, [activeProjectId, activeView]); // Removed projects from dependencies to avoid infinite loop
+  }, [activeProjectId, activeView]);
+
+  // Load transactions for all projects when showing financial dashboard
+  useEffect(() => {
+    const loadAllProjectTransactions = async () => {
+      if (activeView === 'dashboard' && activeProjectId === 'all' && projects.length > 0) {
+        const projectsWithoutTransactions = projects.filter(p => !p.transactions || p.transactions.length === 0);
+        if (projectsWithoutTransactions.length > 0) {
+          try {
+            console.log('📦 Loading transactions for all projects for financial dashboard...');
+            const projectsWithTransactions = await Promise.all(
+              projectsWithoutTransactions.map(async (project) => {
+                try {
+                  const transactions = await projectService.loadProjectTransactions(project.id);
+                  return { ...project, transactions };
+                } catch (error) {
+                  console.error(`Error loading transactions for project ${project.id}:`, error);
+                  return { ...project, transactions: [] };
+                }
+              })
+            );
+            
+            setProjects(prevProjects => 
+              prevProjects.map(p => {
+                const updated = projectsWithTransactions.find(up => up.id === p.id);
+                return updated || p;
+              })
+            );
+            console.log('✅ Transactions loaded for financial dashboard');
+          } catch (error) {
+            console.error('Error loading transactions for financial dashboard:', error);
+          }
+        }
+      }
+    };
+
+    loadAllProjectTransactions();
+  }, [activeView, activeProjectId]); // Only trigger when view or project selection changes
 
   // Auto-pause all active sessions when page unloads
   useEffect(() => {
@@ -2124,6 +2161,49 @@ export default function App() {
 
     return { total, completed, pending, overdue, totalHours };
   }, [filteredTasks]);
+
+  // Tính toán các chỉ số tài chính tổng hợp
+  const financialStats = useMemo(() => {
+    let totalProjectValue = 0;
+    let totalIncome = 0;
+    let totalExpense = 0;
+    let totalAmountToCollect = 0;
+    let totalBalance = 0;
+    const projectFinancials: Array<{ name: string; value: number; income: number; expense: number; toCollect: number }> = [];
+
+    projects.forEach(project => {
+      const projectPrice = project.price || 0;
+      const projectIncome = project.transactions?.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0) || 0;
+      const projectExpense = project.transactions?.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0) || 0;
+      const projectBalance = projectIncome - projectExpense;
+      const projectToCollect = projectPrice > 0 ? projectPrice - projectIncome : 0;
+
+      totalProjectValue += projectPrice;
+      totalIncome += projectIncome;
+      totalExpense += projectExpense;
+      totalBalance += projectBalance;
+      totalAmountToCollect += projectToCollect;
+
+      if (projectPrice > 0 || projectIncome > 0 || projectExpense > 0) {
+        projectFinancials.push({
+          name: project.name,
+          value: projectPrice,
+          income: projectIncome,
+          expense: projectExpense,
+          toCollect: projectToCollect
+        });
+      }
+    });
+
+    return {
+      totalProjectValue,
+      totalIncome,
+      totalExpense,
+      totalAmountToCollect,
+      totalBalance,
+      projectFinancials
+    };
+  }, [projects]);
 
   // Handlers
   const handleAddProject = async (name: string, description: string, price?: number) => {
@@ -2729,6 +2809,20 @@ export default function App() {
                             </div>
                           )}
                           <div className="text-[10px]">
+                            <div className="text-slate-500">Tổng thu</div>
+                            <div className="font-semibold text-emerald-600">
+                              {new Intl.NumberFormat('vi-VN').format(totalIncome)} VNĐ
+                            </div>
+                          </div>
+                          {p.price && p.price > 0 && (
+                            <div className="text-[10px]">
+                              <div className="text-slate-500">Số tiền cần thu</div>
+                              <div className={`font-semibold ${(p.price - totalIncome) > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                                {new Intl.NumberFormat('vi-VN').format(p.price - totalIncome)} VNĐ
+                              </div>
+                            </div>
+                          )}
+                          <div className="text-[10px]">
                             <div className="text-slate-500">Số dư</div>
                             <div className={`font-semibold ${balance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                               {new Intl.NumberFormat('vi-VN').format(balance)} VNĐ
@@ -2813,9 +2907,13 @@ export default function App() {
                   ? Math.min((totalIncome / activeProject.price) * 100, 100) 
                   : 0;
 
+                const amountToCollect = activeProject.price && activeProject.price > 0 
+                  ? activeProject.price - totalIncome 
+                  : 0;
+
                 return (
                   <div className="flex flex-col gap-3">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 flex-wrap">
                       {activeProject.price && activeProject.price > 0 && (
                         <div className="px-4 py-2.5 bg-violet-50 rounded-xl border-2 border-violet-200 shadow-sm">
                           <div className="flex flex-col items-center gap-1">
@@ -2840,6 +2938,19 @@ export default function App() {
                         </div>
                       </div>
                     </div>
+                    {activeProject.price && activeProject.price > 0 && (
+                      <div className={`px-4 py-2.5 rounded-xl border-2 shadow-sm ${amountToCollect > 0 ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`}>
+                        <div className="flex flex-col items-center gap-1">
+                          <div className="flex items-center gap-1.5">
+                            <DollarSign size={16} className={amountToCollect > 0 ? 'text-amber-600' : 'text-emerald-600'} />
+                            <span className={`text-sm font-black uppercase tracking-wide ${amountToCollect > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>Số tiền cần thu</span>
+                          </div>
+                          <div className={`text-sm font-black mt-0.5 ${amountToCollect > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                            {formatCurrency(amountToCollect)} VNĐ
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     <div className="px-4 py-2.5 bg-rose-50 rounded-xl border-2 border-rose-200 shadow-sm">
                       <div className="flex flex-col items-center gap-1">
                         <div className="flex items-center gap-1.5">
@@ -2949,6 +3060,99 @@ export default function App() {
               <StatCard icon={<AlertCircle size={18} className="text-rose-600" />} label="Trễ hạn" value={stats.overdue} color="rose" />
               <StatCard icon={<Sparkles size={18} className="text-violet-600" />} label="Tổng giờ làm" value={stats.totalHours} color="indigo" />
             </div>
+
+            {/* Financial Dashboard - Chỉ hiển thị khi chọn "Tất cả dự án" */}
+            {activeProjectId === 'all' && (
+            <div className="bg-white rounded-xl border-2 border-slate-200 shadow-sm p-6 mb-6">
+              <div className="flex items-center gap-2 mb-4">
+                <DollarSign size={20} className="text-indigo-600" />
+                <h3 className="text-lg font-bold text-slate-800">Dashboard Tài Chính Tổng Hợp</h3>
+              </div>
+              
+              {/* Financial Stats Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+                <div className="px-4 py-3 bg-violet-50 rounded-lg border-2 border-violet-200">
+                  <div className="flex items-center gap-2 mb-1">
+                    <DollarSign size={16} className="text-violet-600" />
+                    <span className="text-xs font-semibold text-violet-700 uppercase">Tổng giá trị dự án</span>
+                  </div>
+                  <div className="text-lg font-black text-violet-600">
+                    {new Intl.NumberFormat('vi-VN').format(financialStats.totalProjectValue)} VNĐ
+                  </div>
+                </div>
+                
+                <div className="px-4 py-3 bg-emerald-50 rounded-lg border-2 border-emerald-200">
+                  <div className="flex items-center gap-2 mb-1">
+                    <ArrowUpCircle size={16} className="text-emerald-600" />
+                    <span className="text-xs font-semibold text-emerald-700 uppercase">Tổng thu</span>
+                  </div>
+                  <div className="text-lg font-black text-emerald-600">
+                    {new Intl.NumberFormat('vi-VN').format(financialStats.totalIncome)} VNĐ
+                  </div>
+                </div>
+                
+                <div className="px-4 py-3 bg-rose-50 rounded-lg border-2 border-rose-200">
+                  <div className="flex items-center gap-2 mb-1">
+                    <ArrowDownCircle size={16} className="text-rose-600" />
+                    <span className="text-xs font-semibold text-rose-700 uppercase">Tổng chi</span>
+                  </div>
+                  <div className="text-lg font-black text-rose-600">
+                    {new Intl.NumberFormat('vi-VN').format(financialStats.totalExpense)} VNĐ
+                  </div>
+                </div>
+                
+                <div className={`px-4 py-3 rounded-lg border-2 ${financialStats.totalAmountToCollect > 0 ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <DollarSign size={16} className={financialStats.totalAmountToCollect > 0 ? 'text-amber-600' : 'text-emerald-600'} />
+                    <span className={`text-xs font-semibold uppercase ${financialStats.totalAmountToCollect > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>Số tiền cần thu</span>
+                  </div>
+                  <div className={`text-lg font-black ${financialStats.totalAmountToCollect > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                    {new Intl.NumberFormat('vi-VN').format(financialStats.totalAmountToCollect)} VNĐ
+                  </div>
+                </div>
+                
+                <div className={`px-4 py-3 rounded-lg border-2 ${financialStats.totalBalance >= 0 ? 'bg-indigo-50 border-indigo-200' : 'bg-rose-50 border-rose-200'}`}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <DollarSign size={16} className={financialStats.totalBalance >= 0 ? 'text-indigo-600' : 'text-rose-600'} />
+                    <span className={`text-xs font-semibold uppercase ${financialStats.totalBalance >= 0 ? 'text-indigo-700' : 'text-rose-700'}`}>Tổng số dư</span>
+                  </div>
+                  <div className={`text-lg font-black ${financialStats.totalBalance >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>
+                    {new Intl.NumberFormat('vi-VN').format(financialStats.totalBalance)} VNĐ
+                  </div>
+                </div>
+              </div>
+
+              {/* Financial Chart */}
+              {financialStats.projectFinancials.length > 0 && (
+                <div className="mt-6">
+                  <h4 className="text-sm font-semibold text-slate-700 mb-3">Phân bổ tài chính theo dự án</h4>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={financialStats.projectFinancials}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis 
+                          dataKey="name" 
+                          angle={-45}
+                          textAnchor="end"
+                          height={100}
+                          fontSize={10}
+                        />
+                        <YAxis fontSize={10} />
+                        <Tooltip 
+                          formatter={(value: number) => new Intl.NumberFormat('vi-VN').format(value) + ' VNĐ'}
+                        />
+                        <Legend />
+                        <Bar dataKey="value" fill="#8b5cf6" name="Giá dự án" />
+                        <Bar dataKey="income" fill="#10b981" name="Tổng thu" />
+                        <Bar dataKey="expense" fill="#ef4444" name="Tổng chi" />
+                        <Bar dataKey="toCollect" fill="#f59e0b" name="Cần thu" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+            </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
               <div className="lg:col-span-2">
