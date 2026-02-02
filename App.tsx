@@ -39,7 +39,9 @@ import {
   PieChart,
   Pie,
   Cell,
-  Legend
+  Legend,
+  LineChart,
+  Line
 } from 'recharts';
 import { format, isPast, isToday, parseISO, differenceInMinutes, differenceInHours } from 'date-fns';
 import { vi } from 'date-fns/locale';
@@ -315,11 +317,16 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete, onComplet
   const handleToggleSubtask = async (subtaskId: string) => {
     try {
       const updatedSubtask = await subtaskService.toggleComplete(subtaskId);
+      
+      // Update subtasks state với subtask đã được cập nhật (có sessions mới)
       setSubtasks(subtasks.map(s => s.id === subtaskId ? updatedSubtask : s));
       
-      // Update parent task
+      // Reload task để có dữ liệu subtasks và sessions mới nhất
       const updatedTask = await taskService.getById(task.id);
-      if (updatedTask) {
+      if (updatedTask && updatedTask.subtasks) {
+        // Cập nhật subtasks state với dữ liệu mới nhất từ database
+        setSubtasks(updatedTask.subtasks);
+        // Update parent task để UI cập nhật tổng thời gian
         onTaskUpdate(updatedTask);
       }
     } catch (error: any) {
@@ -996,6 +1003,8 @@ const ProjectTransactionModal: React.FC<ProjectTransactionModalProps> = ({ proje
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [transactionDate, setTransactionDate] = useState(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+  const [paymentDate, setPaymentDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [status, setStatus] = useState<'pending' | 'paid'>('pending');
   const [recipientId, setRecipientId] = useState('');
   const [receiptImageUrl, setReceiptImageUrl] = useState('');
   const [isUploading, setIsUploading] = useState(false);
@@ -1093,6 +1102,8 @@ const ProjectTransactionModal: React.FC<ProjectTransactionModalProps> = ({ proje
         amount: transactionAmount,
         description: description.trim() || undefined,
         transactionDate: transactionDate ? new Date(transactionDate).toISOString() : new Date().toISOString(),
+        paymentDate: paymentDate ? new Date(paymentDate).toISOString() : undefined,
+        status: status,
         recipientId: type === 'expense' ? recipientId : undefined,
         receiptImageUrl: type === 'expense' && receiptImageUrl ? receiptImageUrl : undefined
       });
@@ -1101,6 +1112,9 @@ const ProjectTransactionModal: React.FC<ProjectTransactionModalProps> = ({ proje
       // Reset form
       setAmount('');
       setDescription('');
+      setPaymentDate(format(new Date(), "yyyy-MM-dd"));
+      setStatus('pending');
+      setTransactionDate(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
       setRecipientId('');
       setReceiptImageUrl('');
       onTransactionAdded();
@@ -1112,9 +1126,9 @@ const ProjectTransactionModal: React.FC<ProjectTransactionModalProps> = ({ proje
     }
   };
 
-  // Calculate balance from loaded transactions
-  const totalIncome = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
-  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+  // Calculate balance from loaded transactions (chỉ tính income đã thanh toán và expense đã chi)
+  const totalIncome = transactions.filter(t => t.type === 'income' && t.status === 'paid').reduce((sum, t) => sum + t.amount, 0);
+  const totalExpense = transactions.filter(t => t.type === 'expense' && t.status === 'paid').reduce((sum, t) => sum + t.amount, 0);
   const balance = totalIncome - totalExpense;
 
   const formatCurrency = (amount: number) => {
@@ -1190,10 +1204,100 @@ const ProjectTransactionModal: React.FC<ProjectTransactionModalProps> = ({ proje
             />
           </div>
 
+          {type === 'income' && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Ngày thu</label>
+                <input
+                  type="date"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Trạng thái thanh toán</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setStatus('pending')}
+                    className={`py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
+                      status === 'pending'
+                        ? 'bg-amber-600 text-white shadow-md'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Chờ thanh toán
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStatus('paid')}
+                    className={`py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
+                      status === 'paid'
+                        ? 'bg-emerald-600 text-white shadow-md'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Đã thanh toán
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Thời gian tạo</label>
+                <input
+                  type="datetime-local"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  value={transactionDate}
+                  onChange={(e) => setTransactionDate(e.target.value)}
+                />
+              </div>
+            </>
+          )}
+
           {type === 'expense' && (
             <>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Thời gian chi</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Ngày sẽ chi</label>
+                <input
+                  type="date"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Trạng thái chi</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setStatus('pending')}
+                    className={`py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
+                      status === 'pending'
+                        ? 'bg-amber-600 text-white shadow-md'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Chờ chi
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStatus('paid')}
+                    className={`py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
+                      status === 'paid'
+                        ? 'bg-rose-600 text-white shadow-md'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Đã chi
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Thời gian tạo</label>
                 <input
                   type="datetime-local"
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20"
@@ -1698,6 +1802,356 @@ const TaskModal: React.FC<TaskModalProps> = ({ onClose, onSubmit, projects, init
 
 
 
+interface ThuChiViewProps {
+  projects: Project[];
+  employees: Employee[];
+  onTransactionAdded: () => void;
+}
+
+const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransactionAdded }) => {
+  const [selectedProjectId, setSelectedProjectId] = useState<string | 'all'>('all');
+  const [transactionType, setTransactionType] = useState<'all' | 'income' | 'expense'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'paid'>('all');
+  const [dateFilter, setDateFilter] = useState<'all' | 'thisMonth' | 'thisQuarter' | 'thisYear' | 'custom'>('all');
+  const [customDateStart, setCustomDateStart] = useState('');
+  const [customDateEnd, setCustomDateEnd] = useState('');
+  const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
+  const [selectedProjectForTransaction, setSelectedProjectForTransaction] = useState<Project | null>(null);
+  const [allTransactions, setAllTransactions] = useState<ProjectTransaction[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // Load all transactions
+  useEffect(() => {
+    const loadTransactions = async () => {
+      setLoading(true);
+      try {
+        const transactions: ProjectTransaction[] = [];
+        for (const project of projects) {
+          const projectTransactions = await projectService.loadProjectTransactions(project.id);
+          transactions.push(...projectTransactions);
+        }
+        // Sort by transaction date (newest first)
+        transactions.sort((a, b) => new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime());
+        setAllTransactions(transactions);
+      } catch (error) {
+        console.error('Error loading transactions:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadTransactions();
+  }, [projects]);
+
+  // Filter transactions
+  const filteredTransactions = useMemo(() => {
+    let filtered = allTransactions;
+
+    // Filter by project
+    if (selectedProjectId !== 'all') {
+      filtered = filtered.filter(t => t.projectId === selectedProjectId);
+    }
+
+    // Filter by type
+    if (transactionType !== 'all') {
+      filtered = filtered.filter(t => t.type === transactionType);
+    }
+
+    // Filter by status
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(t => t.status === statusFilter);
+    }
+
+    // Filter by date
+    if (dateFilter !== 'all') {
+      const now = new Date();
+      let dateStart: Date | null = null;
+      let dateEnd: Date | null = null;
+
+      if (dateFilter === 'thisMonth') {
+        dateStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        dateEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+      } else if (dateFilter === 'thisQuarter') {
+        const quarter = Math.floor(now.getMonth() / 3);
+        dateStart = new Date(now.getFullYear(), quarter * 3, 1);
+        dateEnd = new Date(now.getFullYear(), (quarter + 1) * 3, 0, 23, 59, 59);
+      } else if (dateFilter === 'thisYear') {
+        dateStart = new Date(now.getFullYear(), 0, 1);
+        dateEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
+      } else if (dateFilter === 'custom' && customDateStart && customDateEnd) {
+        dateStart = new Date(customDateStart);
+        dateEnd = new Date(customDateEnd);
+        dateEnd.setHours(23, 59, 59);
+      }
+
+      if (dateStart && dateEnd) {
+        filtered = filtered.filter(t => {
+          const checkDate = t.paymentDate ? new Date(t.paymentDate) : new Date(t.transactionDate);
+          return checkDate >= dateStart! && checkDate <= dateEnd!;
+        });
+      }
+    }
+
+    return filtered;
+  }, [allTransactions, selectedProjectId, transactionType, statusFilter, dateFilter, customDateStart, customDateEnd]);
+
+  // Calculate totals
+  const totals = useMemo(() => {
+    const incomePaid = filteredTransactions.filter(t => t.type === 'income' && t.status === 'paid').reduce((sum, t) => sum + t.amount, 0);
+    const incomePending = filteredTransactions.filter(t => t.type === 'income' && t.status === 'pending').reduce((sum, t) => sum + t.amount, 0);
+    const expensePaid = filteredTransactions.filter(t => t.type === 'expense' && t.status === 'paid').reduce((sum, t) => sum + t.amount, 0);
+    const expensePending = filteredTransactions.filter(t => t.type === 'expense' && t.status === 'pending').reduce((sum, t) => sum + t.amount, 0);
+    return {
+      incomePaid,
+      incomePending,
+      expensePaid,
+      expensePending,
+      balance: incomePaid - expensePaid
+    };
+  }, [filteredTransactions]);
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('vi-VN').format(amount);
+  };
+
+  const handleAddTransaction = (project: Project) => {
+    setSelectedProjectForTransaction(project);
+    setIsTransactionModalOpen(true);
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="px-4 py-3 bg-emerald-50 rounded-lg border-2 border-emerald-200">
+          <div className="text-xs font-semibold text-emerald-700 uppercase mb-1">Tổng thu (đã thanh toán)</div>
+          <div className="text-lg font-black text-emerald-600">{formatCurrency(totals.incomePaid)} VNĐ</div>
+        </div>
+        <div className="px-4 py-3 bg-amber-50 rounded-lg border-2 border-amber-200">
+          <div className="text-xs font-semibold text-amber-700 uppercase mb-1">Tổng thu (chờ thanh toán)</div>
+          <div className="text-lg font-black text-amber-600">{formatCurrency(totals.incomePending)} VNĐ</div>
+        </div>
+        <div className="px-4 py-3 bg-rose-50 rounded-lg border-2 border-rose-200">
+          <div className="text-xs font-semibold text-rose-700 uppercase mb-1">Tổng chi (đã chi)</div>
+          <div className="text-lg font-black text-rose-600">{formatCurrency(totals.expensePaid)} VNĐ</div>
+        </div>
+        <div className={`px-4 py-3 rounded-lg border-2 ${totals.balance >= 0 ? 'bg-indigo-50 border-indigo-200' : 'bg-rose-50 border-rose-200'}`}>
+          <div className={`text-xs font-semibold uppercase mb-1 ${totals.balance >= 0 ? 'text-indigo-700' : 'text-rose-700'}`}>Số dư</div>
+          <div className={`text-lg font-black ${totals.balance >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>{formatCurrency(totals.balance)} VNĐ</div>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white rounded-xl border-2 border-slate-200 shadow-sm p-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Dự án</label>
+            <select
+              value={selectedProjectId}
+              onChange={(e) => setSelectedProjectId(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+            >
+              <option value="all">Tất cả dự án</option>
+              {projects.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Loại</label>
+            <select
+              value={transactionType}
+              onChange={(e) => setTransactionType(e.target.value as 'all' | 'income' | 'expense')}
+              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+            >
+              <option value="all">Tất cả</option>
+              <option value="income">Thu</option>
+              <option value="expense">Chi</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Trạng thái</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as 'all' | 'pending' | 'paid')}
+              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+            >
+              <option value="all">Tất cả</option>
+              <option value="pending">Chờ</option>
+              <option value="paid">Đã thanh toán</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Thời gian</label>
+            <select
+              value={dateFilter}
+              onChange={(e) => {
+                setDateFilter(e.target.value as 'all' | 'thisMonth' | 'thisQuarter' | 'thisYear' | 'custom');
+                if (e.target.value !== 'custom') {
+                  setCustomDateStart('');
+                  setCustomDateEnd('');
+                }
+              }}
+              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+            >
+              <option value="all">Tất cả</option>
+              <option value="thisMonth">Tháng này</option>
+              <option value="thisQuarter">Quý này</option>
+              <option value="thisYear">Năm này</option>
+              <option value="custom">Tùy chỉnh</option>
+            </select>
+          </div>
+          <div className="flex items-end gap-2">
+            {dateFilter === 'custom' && (
+              <>
+                <input
+                  type="date"
+                  value={customDateStart}
+                  onChange={(e) => setCustomDateStart(e.target.value)}
+                  className="flex-1 px-2 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                />
+                <span className="text-slate-500">-</span>
+                <input
+                  type="date"
+                  value={customDateEnd}
+                  onChange={(e) => setCustomDateEnd(e.target.value)}
+                  className="flex-1 px-2 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                />
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Add Transaction Button */}
+      <div className="flex justify-end">
+        <button
+          onClick={() => {
+            if (projects.length > 0) {
+              handleAddTransaction(projects[0]);
+            } else {
+              alert('Vui lòng tạo dự án trước khi thêm transaction');
+            }
+          }}
+          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-all"
+        >
+          <Plus size={16} />
+          Thêm thu chi
+        </button>
+      </div>
+
+      {/* Transactions List */}
+      <div className="bg-white rounded-xl border-2 border-slate-200 shadow-sm">
+        {loading ? (
+          <div className="p-8 text-center text-slate-500">
+            <Clock className="animate-spin mx-auto mb-2" size={24} />
+            <p>Đang tải...</p>
+          </div>
+        ) : filteredTransactions.length === 0 ? (
+          <div className="p-8 text-center text-slate-500">
+            <DollarSign className="mx-auto mb-2 text-slate-400" size={32} />
+            <p>Chưa có giao dịch nào</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Ngày</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Dự án</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Loại</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Số tiền</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Trạng thái</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Mô tả</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {filteredTransactions.map(transaction => {
+                  const project = projects.find(p => p.id === transaction.projectId);
+                  const dateToShow = transaction.paymentDate || transaction.transactionDate;
+                  return (
+                    <tr key={transaction.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-4 py-3 text-sm text-slate-600">
+                        {format(parseISO(dateToShow), 'dd/MM/yyyy', { locale: vi })}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-700 font-medium">
+                        {project?.name || 'N/A'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                          transaction.type === 'income' 
+                            ? 'bg-emerald-100 text-emerald-700' 
+                            : 'bg-rose-100 text-rose-700'
+                        }`}>
+                          {transaction.type === 'income' ? 'Thu' : 'Chi'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm font-bold text-slate-900">
+                        {formatCurrency(transaction.amount)} VNĐ
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                          transaction.status === 'paid' 
+                            ? 'bg-indigo-100 text-indigo-700' 
+                            : 'bg-amber-100 text-amber-700'
+                        }`}>
+                          {transaction.status === 'paid' 
+                            ? (transaction.type === 'income' ? 'Đã thanh toán' : 'Đã chi') 
+                            : (transaction.type === 'income' ? 'Chờ thanh toán' : 'Chờ chi')}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600">
+                        {transaction.description || '-'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => {
+                            const project = projects.find(p => p.id === transaction.projectId);
+                            if (project) {
+                              handleAddTransaction(project);
+                            }
+                          }}
+                          className="text-indigo-600 hover:text-indigo-700 text-xs font-medium"
+                        >
+                          Sửa
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Transaction Modal */}
+      {isTransactionModalOpen && selectedProjectForTransaction && (
+        <ProjectTransactionModal
+          project={selectedProjectForTransaction}
+          employees={employees}
+          onClose={() => {
+            setIsTransactionModalOpen(false);
+            setSelectedProjectForTransaction(null);
+          }}
+          onTransactionAdded={async () => {
+            onTransactionAdded();
+            // Reload transactions
+            const transactions: ProjectTransaction[] = [];
+            for (const project of projects) {
+              const projectTransactions = await projectService.loadProjectTransactions(project.id);
+              transactions.push(...projectTransactions);
+            }
+            transactions.sort((a, b) => new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime());
+            setAllTransactions(transactions);
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
 const CompleteTaskModal: React.FC<CompleteTaskModalProps> = ({ onClose, onSubmit, taskTitle, initialHours }) => {
   const [hoursWorked, setHoursWorked] = useState<string>(initialHours ? initialHours.toString() : '');
 
@@ -1767,7 +2221,7 @@ export default function App() {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeView, setActiveView] = useState<'dashboard' | 'employees' | 'cohoichoai'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'employees' | 'cohoichoai' | 'thuchi'>('dashboard');
   const [taskTypes, setTaskTypes] = useState<TaskType[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [isManageTypesOpen, setIsManageTypesOpen] = useState(false);
@@ -1781,6 +2235,9 @@ export default function App() {
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [selectedProjectForTransaction, setSelectedProjectForTransaction] = useState<Project | null>(null);
   const [projectSearchQuery, setProjectSearchQuery] = useState('');
+  const [financialDateFilter, setFinancialDateFilter] = useState<'all' | 'thisMonth' | 'thisQuarter' | 'thisYear' | 'custom'>('all');
+  const [customDateStart, setCustomDateStart] = useState('');
+  const [customDateEnd, setCustomDateEnd] = useState('');
 
   // Monitor online/offline status and sync pending actions
   useEffect(() => {
@@ -2162,38 +2619,162 @@ export default function App() {
     return { total, completed, pending, overdue, totalHours };
   }, [filteredTasks]);
 
-  // Tính toán các chỉ số tài chính tổng hợp
+  // Tính toán các chỉ số tài chính tổng hợp với bộ lọc thời gian
   const financialStats = useMemo(() => {
+    // Tính toán khoảng thời gian filter
+    let dateStart: Date | null = null;
+    let dateEnd: Date | null = null;
+    const now = new Date();
+    
+    if (financialDateFilter === 'thisMonth') {
+      dateStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      dateEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    } else if (financialDateFilter === 'thisQuarter') {
+      const quarter = Math.floor(now.getMonth() / 3);
+      dateStart = new Date(now.getFullYear(), quarter * 3, 1);
+      dateEnd = new Date(now.getFullYear(), (quarter + 1) * 3, 0, 23, 59, 59);
+    } else if (financialDateFilter === 'thisYear') {
+      dateStart = new Date(now.getFullYear(), 0, 1);
+      dateEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
+    } else if (financialDateFilter === 'custom' && customDateStart && customDateEnd) {
+      dateStart = new Date(customDateStart);
+      dateEnd = new Date(customDateEnd);
+      dateEnd.setHours(23, 59, 59);
+    }
+
+    // Helper function để kiểm tra transaction có trong khoảng thời gian không
+    const isInDateRange = (transactionDate: string, paymentDate?: string) => {
+      if (!dateStart || !dateEnd) return true; // Nếu không có filter, trả về true
+      // Với income, kiểm tra paymentDate nếu có, nếu không thì dùng transactionDate
+      const checkDate = paymentDate ? new Date(paymentDate) : new Date(transactionDate);
+      return checkDate >= dateStart && checkDate <= dateEnd;
+    };
+
     let totalProjectValue = 0;
     let totalIncome = 0;
+    let totalIncomePending = 0;
     let totalExpense = 0;
+    let totalExpensePending = 0;
     let totalAmountToCollect = 0;
     let totalBalance = 0;
-    const projectFinancials: Array<{ name: string; value: number; income: number; expense: number; toCollect: number }> = [];
+    let totalProfit = 0;
+    const projectFinancials: Array<{ name: string; value: number; income: number; expense: number; toCollect: number; profit: number }> = [];
 
     projects.forEach(project => {
       const projectPrice = project.price || 0;
-      const projectIncome = project.transactions?.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0) || 0;
-      const projectExpense = project.transactions?.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0) || 0;
-      const projectBalance = projectIncome - projectExpense;
-      const projectToCollect = projectPrice > 0 ? projectPrice - projectIncome : 0;
+      // Chỉ tính income đã thanh toán (status = 'paid') vào tổng thu, có filter thời gian
+      const projectIncomePaid = project.transactions?.filter(t => 
+        t.type === 'income' && 
+        t.status === 'paid' && 
+        isInDateRange(t.transactionDate, t.paymentDate)
+      ).reduce((sum, t) => sum + t.amount, 0) || 0;
+      // Tính income chờ thanh toán (status = 'pending'), có filter thời gian
+      const projectIncomePending = project.transactions?.filter(t => 
+        t.type === 'income' && 
+        t.status === 'pending' && 
+        isInDateRange(t.transactionDate, t.paymentDate)
+      ).reduce((sum, t) => sum + t.amount, 0) || 0;
+      // Chỉ tính expense đã chi (status = 'paid') vào tổng chi, có filter thời gian
+      const projectExpensePaid = project.transactions?.filter(t => 
+        t.type === 'expense' && 
+        t.status === 'paid' && 
+        isInDateRange(t.transactionDate, t.paymentDate)
+      ).reduce((sum, t) => sum + t.amount, 0) || 0;
+      // Tính expense chờ chi (status = 'pending'), có filter thời gian
+      const projectExpensePending = project.transactions?.filter(t => 
+        t.type === 'expense' && 
+        t.status === 'pending' && 
+        isInDateRange(t.transactionDate, t.paymentDate)
+      ).reduce((sum, t) => sum + t.amount, 0) || 0;
+      const projectBalance = projectIncomePaid - projectExpensePaid;
+      // Lợi nhuận = Thu - Chi
+      const projectProfit = projectIncomePaid - projectExpensePaid;
+      // Số tiền cần thu = Tổng thu (chờ thanh toán trong khoảng thời gian đã chọn)
+      // Chỉ tính các transaction income có status = 'pending' trong khoảng thời gian
+      const projectToCollect = projectIncomePending;
 
       totalProjectValue += projectPrice;
-      totalIncome += projectIncome;
-      totalExpense += projectExpense;
+      totalIncome += projectIncomePaid; // Chỉ tính income đã thanh toán
+      totalIncomePending += projectIncomePending; // Tổng thu chờ thanh toán
+      totalExpense += projectExpensePaid; // Chỉ tính expense đã chi
+      totalExpensePending += projectExpensePending; // Tổng chi chờ chi
       totalBalance += projectBalance;
+      totalProfit += projectProfit;
       totalAmountToCollect += projectToCollect;
 
-      if (projectPrice > 0 || projectIncome > 0 || projectExpense > 0) {
+      if (projectPrice > 0 || projectIncomePaid > 0 || projectIncomePending > 0 || projectExpensePaid > 0 || projectExpensePending > 0) {
         projectFinancials.push({
           name: project.name,
           value: projectPrice,
-          income: projectIncome,
-          expense: projectExpense,
-          toCollect: projectToCollect
+          income: projectIncomePaid, // Chỉ hiển thị income đã thanh toán
+          expense: projectExpensePaid,
+          toCollect: projectToCollect,
+          profit: projectProfit
         });
       }
     });
+
+    // Tính tổng tất cả các trạng thái để tính phần trăm
+    const totalAll = totalIncome + totalIncomePending + totalExpense + totalExpensePending + totalAmountToCollect;
+
+    // Tính phần trăm cho từng trạng thái
+    const financialStatusData = [
+      {
+        name: 'Thu đã thanh toán',
+        value: totalIncome,
+        percentage: totalAll > 0 ? (totalIncome / totalAll) * 100 : 0,
+        color: '#10b981'
+      },
+      {
+        name: 'Thu chờ thanh toán',
+        value: totalIncomePending,
+        percentage: totalAll > 0 ? (totalIncomePending / totalAll) * 100 : 0,
+        color: '#f59e0b'
+      },
+      {
+        name: 'Chi đã chi',
+        value: totalExpense,
+        percentage: totalAll > 0 ? (totalExpense / totalAll) * 100 : 0,
+        color: '#ef4444'
+      },
+      {
+        name: 'Chi chờ chi',
+        value: totalExpensePending,
+        percentage: totalAll > 0 ? (totalExpensePending / totalAll) * 100 : 0,
+        color: '#f97316'
+      },
+      {
+        name: 'Cần thu',
+        value: totalAmountToCollect,
+        percentage: totalAll > 0 ? (totalAmountToCollect / totalAll) * 100 : 0,
+        color: '#8b5cf6'
+      }
+    ].filter(item => item.value > 0); // Chỉ hiển thị các trạng thái có giá trị > 0
+
+    // Dữ liệu cho biểu đồ lợi nhuận theo dự án
+    const profitByProjectData = projectFinancials.map(project => ({
+      name: project.name.length > 15 ? project.name.substring(0, 15) + '...' : project.name,
+      fullName: project.name,
+      profit: project.profit
+    })).filter(item => item.profit !== 0); // Chỉ hiển thị dự án có lợi nhuận khác 0
+
+    // Dữ liệu cho biểu đồ phần trăm bám đuổi thu chi (tỷ lệ thu/chi theo dự án)
+    const incomeExpenseRatioData = projectFinancials.map(project => {
+      const income = project.income;
+      const expense = project.expense;
+      const total = income + expense;
+      const incomePercent = total > 0 ? (income / total) * 100 : 0;
+      const expensePercent = total > 0 ? (expense / total) * 100 : 0;
+      
+      return {
+        name: project.name.length > 15 ? project.name.substring(0, 15) + '...' : project.name,
+        fullName: project.name,
+        income: income,
+        expense: expense,
+        incomePercent: incomePercent,
+        expensePercent: expensePercent
+      };
+    }).filter(item => item.income > 0 || item.expense > 0); // Chỉ hiển thị dự án có thu hoặc chi
 
     return {
       totalProjectValue,
@@ -2201,9 +2782,13 @@ export default function App() {
       totalExpense,
       totalAmountToCollect,
       totalBalance,
-      projectFinancials
+      totalProfit,
+      projectFinancials,
+      financialStatusData,
+      profitByProjectData,
+      incomeExpenseRatioData
     };
-  }, [projects]);
+  }, [projects, financialDateFilter, customDateStart, customDateEnd]);
 
   // Handlers
   const handleAddProject = async (name: string, description: string, price?: number) => {
@@ -2652,6 +3237,13 @@ export default function App() {
             <FileText size={16} />
             Báo giá
           </button>
+          <button
+            onClick={() => setActiveView('thuchi')}
+            className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg transition-all text-sm ${activeView === 'thuchi' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20' : 'text-slate-500 hover:bg-slate-100'}`}
+          >
+            <DollarSign size={16} />
+            Thu chi
+          </button>
 
           <div className="h-px bg-slate-200 my-2 mx-1"></div>
 
@@ -2716,9 +3308,12 @@ export default function App() {
                     const total = pTasks.length;
                     const completed = pTasks.filter(t => t.isCompleted).length;
                     const percent = total > 0 ? (completed / total) * 100 : 0;
-                    const totalIncome = p.transactions?.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0) || 0;
-                    const totalExpense = p.transactions?.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0) || 0;
+                    // Chỉ tính income đã thanh toán
+                    const totalIncome = p.transactions?.filter(t => t.type === 'income' && t.status === 'paid').reduce((sum, t) => sum + t.amount, 0) || 0;
+                    const totalIncomePending = p.transactions?.filter(t => t.type === 'income' && t.status === 'pending').reduce((sum, t) => sum + t.amount, 0) || 0;
+                    const totalExpense = p.transactions?.filter(t => t.type === 'expense' && t.status === 'paid').reduce((sum, t) => sum + t.amount, 0) || 0;
                     const balance = totalIncome - totalExpense;
+                    const amountToCollect = p.price && p.price > 0 ? p.price - totalIncome + totalIncomePending : totalIncomePending;
                     
                     return (
                       <div
@@ -2817,8 +3412,8 @@ export default function App() {
                           {p.price && p.price > 0 && (
                             <div className="text-[10px]">
                               <div className="text-slate-500">Số tiền cần thu</div>
-                              <div className={`font-semibold ${(p.price - totalIncome) > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                                {new Intl.NumberFormat('vi-VN').format(p.price - totalIncome)} VNĐ
+                              <div className={`font-semibold ${amountToCollect > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                                {new Intl.NumberFormat('vi-VN').format(amountToCollect)} VNĐ
                               </div>
                             </div>
                           )}
@@ -2890,26 +3485,30 @@ export default function App() {
           <div>
             <div className="flex items-center gap-4">
               <h2 className="text-2xl font-bold text-slate-900">
-                {activeView === 'employees' ? 'Quản lý Nhân sự' : activeView === 'cohoichoai' ? 'Cơ Hội Cho AI' : activeView === 'baogia' ? 'Báo Giá' : activeProjectId === 'all' ? 'Tổng quan Công việc' : projects.find(p => p.id === activeProjectId)?.name}
+                {activeView === 'employees' ? 'Quản lý Nhân sự' : activeView === 'cohoichoai' ? 'Cơ Hội Cho AI' : activeView === 'baogia' ? 'Báo Giá' : activeView === 'thuchi' ? 'Quản lý Thu Chi' : activeProjectId === 'all' ? 'Tổng quan Công việc' : projects.find(p => p.id === activeProjectId)?.name}
               </h2>
               {activeView === 'dashboard' && activeProjectId !== 'all' && (() => {
                 const activeProject = projects.find(p => p.id === activeProjectId);
                 if (!activeProject) return null;
-                const totalIncome = activeProject.transactions?.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0) || 0;
-                const totalExpense = activeProject.transactions?.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0) || 0;
+                // Chỉ tính income đã thanh toán (status = 'paid')
+                const totalIncome = activeProject.transactions?.filter(t => t.type === 'income' && t.status === 'paid').reduce((sum, t) => sum + t.amount, 0) || 0;
+                // Tính income chờ thanh toán (status = 'pending')
+                const totalIncomePending = activeProject.transactions?.filter(t => t.type === 'income' && t.status === 'pending').reduce((sum, t) => sum + t.amount, 0) || 0;
+                const totalExpense = activeProject.transactions?.filter(t => t.type === 'expense' && t.status === 'paid').reduce((sum, t) => sum + t.amount, 0) || 0;
                 const balance = totalIncome - totalExpense;
                 const formatCurrency = (amount: number) => {
                   return new Intl.NumberFormat('vi-VN').format(amount);
                 };
 
-                // Tính tỷ lệ tiến độ thu tiền
+                // Tính tỷ lệ tiến độ thu tiền (chỉ tính income đã thanh toán)
                 const paymentProgress = activeProject.price && activeProject.price > 0 
                   ? Math.min((totalIncome / activeProject.price) * 100, 100) 
                   : 0;
 
+                // Số tiền cần thu = Giá dự án - Tổng thu (đã thanh toán) + Tổng thu (chờ thanh toán)
                 const amountToCollect = activeProject.price && activeProject.price > 0 
-                  ? activeProject.price - totalIncome 
-                  : 0;
+                  ? activeProject.price - totalIncome + totalIncomePending 
+                  : totalIncomePending;
 
                 return (
                   <div className="flex flex-col gap-3">
@@ -3019,7 +3618,7 @@ export default function App() {
                 );
               })()}
             </div>
-            {activeView !== 'dashboard' && activeView !== 'baogia' && (
+            {activeView !== 'dashboard' && activeView !== 'baogia' && activeView !== 'thuchi' && (
               <p className="text-slate-500 mt-1 text-sm">
                 {activeView === 'employees' ? 'Quản lý danh sách nhân viên và thông tin chi tiết.' : activeView === 'cohoichoai' ? 'Chuẩn hóa cách cá nhân hóa quy trình quản trị doanh nghiệp.' : ''}
               </p>
@@ -3064,9 +3663,61 @@ export default function App() {
             {/* Financial Dashboard - Chỉ hiển thị khi chọn "Tất cả dự án" */}
             {activeProjectId === 'all' && (
             <div className="bg-white rounded-xl border-2 border-slate-200 shadow-sm p-6 mb-6">
-              <div className="flex items-center gap-2 mb-4">
-                <DollarSign size={20} className="text-indigo-600" />
-                <h3 className="text-lg font-bold text-slate-800">Dashboard Tài Chính Tổng Hợp</h3>
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+                <div className="flex items-center gap-2">
+                  <DollarSign size={20} className="text-indigo-600" />
+                  <h3 className="text-lg font-bold text-slate-800">Dashboard Tài Chính Tổng Hợp</h3>
+                </div>
+                
+                {/* Bộ lọc thời gian - Từ ngày tới ngày */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <select
+                    value={financialDateFilter}
+                    onChange={(e) => {
+                      const newFilter = e.target.value as 'all' | 'thisMonth' | 'thisQuarter' | 'thisYear' | 'custom';
+                      setFinancialDateFilter(newFilter);
+                      if (newFilter !== 'custom') {
+                        setCustomDateStart('');
+                        setCustomDateEnd('');
+                      }
+                    }}
+                    className="px-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  >
+                    <option value="all">Tất cả thời gian</option>
+                    <option value="thisMonth">Tháng này</option>
+                    <option value="thisQuarter">Quý này</option>
+                    <option value="thisYear">Năm này</option>
+                    <option value="custom">Tùy chỉnh</option>
+                  </select>
+                  
+                  {/* Luôn hiển thị bộ lọc từ ngày tới ngày */}
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-slate-600 whitespace-nowrap">Từ ngày:</label>
+                    <input
+                      type="date"
+                      value={customDateStart}
+                      onChange={(e) => {
+                        setCustomDateStart(e.target.value);
+                        if (e.target.value) {
+                          setFinancialDateFilter('custom');
+                        }
+                      }}
+                      className="px-2 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    />
+                    <label className="text-xs text-slate-600 whitespace-nowrap">Đến ngày:</label>
+                    <input
+                      type="date"
+                      value={customDateEnd}
+                      onChange={(e) => {
+                        setCustomDateEnd(e.target.value);
+                        if (e.target.value) {
+                          setFinancialDateFilter('custom');
+                        }
+                      }}
+                      className="px-2 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    />
+                  </div>
+                </div>
               </div>
               
               {/* Financial Stats Cards */}
@@ -3122,32 +3773,202 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Financial Chart */}
-              {financialStats.projectFinancials.length > 0 && (
+              {/* Financial Chart - Biểu đồ phần trăm các trạng thái tiền */}
+              {financialStats.financialStatusData && financialStats.financialStatusData.length > 0 && (
                 <div className="mt-6">
-                  <h4 className="text-sm font-semibold text-slate-700 mb-3">Phân bổ tài chính theo dự án</h4>
-                  <div className="h-64">
+                  <h4 className="text-sm font-semibold text-slate-700 mb-3">Phân bổ tài chính theo trạng thái (%)</h4>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Pie Chart */}
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={financialStats.financialStatusData}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={({ name, percentage }) => `${name}: ${percentage.toFixed(1)}%`}
+                            outerRadius={80}
+                            fill="#8884d8"
+                            dataKey="value"
+                          >
+                            {financialStats.financialStatusData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip 
+                            formatter={(value: number) => new Intl.NumberFormat('vi-VN').format(value) + ' VNĐ'}
+                          />
+                          <Legend />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    
+                    {/* Status List */}
+                    <div className="space-y-3">
+                      {financialStats.financialStatusData.map((item, index) => (
+                        <div key={index} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
+                          <div className="flex items-center gap-3">
+                            <div className="w-4 h-4 rounded" style={{ backgroundColor: item.color }} />
+                            <span className="text-sm font-medium text-slate-700">{item.name}</span>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-sm font-bold text-slate-900">
+                              {new Intl.NumberFormat('vi-VN').format(item.value)} VNĐ
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              {item.percentage.toFixed(1)}%
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Biểu đồ Lợi nhuận theo tổng và theo dự án */}
+              <div className="mt-6">
+                <h4 className="text-sm font-semibold text-slate-700 mb-3">Lợi nhuận theo dự án</h4>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Tổng lợi nhuận - Card */}
+                  <div className="px-4 py-4 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg border-2 border-indigo-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <DollarSign size={18} className={financialStats.totalProfit >= 0 ? 'text-indigo-600' : 'text-rose-600'} />
+                      <span className="text-xs font-semibold text-slate-700 uppercase">Tổng lợi nhuận</span>
+                    </div>
+                    <div className={`text-2xl font-black ${financialStats.totalProfit >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>
+                      {new Intl.NumberFormat('vi-VN').format(financialStats.totalProfit)} VNĐ
+                    </div>
+                    <div className="text-xs text-slate-500 mt-1">
+                      {financialStats.totalIncome > 0 && (
+                        <span>Tỷ lệ: {((financialStats.totalProfit / financialStats.totalIncome) * 100).toFixed(1)}%</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Biểu đồ lợi nhuận theo dự án */}
+                  {financialStats.profitByProjectData && financialStats.profitByProjectData.length > 0 && (
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={financialStats.profitByProjectData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                          <XAxis 
+                            dataKey="name" 
+                            angle={-45}
+                            textAnchor="end"
+                            height={80}
+                            tick={{ fontSize: 11 }}
+                          />
+                          <YAxis 
+                            tick={{ fontSize: 11 }}
+                            tickFormatter={(value) => new Intl.NumberFormat('vi-VN', { notation: 'compact', maximumFractionDigits: 1 }).format(value)}
+                          />
+                          <Tooltip 
+                            formatter={(value: number, name: string, props: any) => [
+                              new Intl.NumberFormat('vi-VN').format(value) + ' VNĐ',
+                              'Lợi nhuận'
+                            ]}
+                            labelFormatter={(label) => `Dự án: ${label}`}
+                          />
+                          <Bar 
+                            dataKey="profit" 
+                            radius={[4, 4, 0, 0]}
+                          >
+                            {financialStats.profitByProjectData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.profit >= 0 ? '#10b981' : '#ef4444'} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Biểu đồ phần trăm bám đuổi thu chi */}
+              {financialStats.incomeExpenseRatioData && financialStats.incomeExpenseRatioData.length > 0 && (
+                <div className="mt-6">
+                  <h4 className="text-sm font-semibold text-slate-700 mb-3">Phần trăm bám đuổi thu chi theo dự án</h4>
+                  <div className="h-80">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={financialStats.projectFinancials}>
-                        <CartesianGrid strokeDasharray="3 3" />
+                      <BarChart data={financialStats.incomeExpenseRatioData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                         <XAxis 
                           dataKey="name" 
                           angle={-45}
                           textAnchor="end"
                           height={100}
-                          fontSize={10}
+                          tick={{ fontSize: 11 }}
                         />
-                        <YAxis fontSize={10} />
+                        <YAxis 
+                          tick={{ fontSize: 11 }}
+                          label={{ value: 'Phần trăm (%)', angle: -90, position: 'insideLeft' }}
+                        />
                         <Tooltip 
-                          formatter={(value: number) => new Intl.NumberFormat('vi-VN').format(value) + ' VNĐ'}
+                          formatter={(value: number, name: string) => {
+                            if (name === 'incomePercent') {
+                              return [`${value.toFixed(1)}%`, 'Thu'];
+                            } else if (name === 'expensePercent') {
+                              return [`${value.toFixed(1)}%`, 'Chi'];
+                            }
+                            return [new Intl.NumberFormat('vi-VN').format(value) + ' VNĐ', name === 'income' ? 'Thu' : 'Chi'];
+                          }}
+                          labelFormatter={(label) => `Dự án: ${label}`}
                         />
-                        <Legend />
-                        <Bar dataKey="value" fill="#8b5cf6" name="Giá dự án" />
-                        <Bar dataKey="income" fill="#10b981" name="Tổng thu" />
-                        <Bar dataKey="expense" fill="#ef4444" name="Tổng chi" />
-                        <Bar dataKey="toCollect" fill="#f59e0b" name="Cần thu" />
+                        <Legend 
+                          formatter={(value) => {
+                            if (value === 'incomePercent') return 'Thu (%)';
+                            if (value === 'expensePercent') return 'Chi (%)';
+                            return value;
+                          }}
+                        />
+                        <Bar dataKey="incomePercent" stackId="a" fill="#10b981" name="incomePercent" radius={[0, 0, 0, 0]}>
+                          {financialStats.incomeExpenseRatioData.map((entry, index) => (
+                            <Cell key={`income-cell-${index}`} fill="#10b981" />
+                          ))}
+                        </Bar>
+                        <Bar dataKey="expensePercent" stackId="a" fill="#ef4444" name="expensePercent" radius={[4, 4, 0, 0]}>
+                          {financialStats.incomeExpenseRatioData.map((entry, index) => (
+                            <Cell key={`expense-cell-${index}`} fill="#ef4444" />
+                          ))}
+                        </Bar>
                       </BarChart>
                     </ResponsiveContainer>
+                  </div>
+                  
+                  {/* Bảng chi tiết phần trăm thu chi */}
+                  <div className="mt-4 overflow-x-auto">
+                    <table className="w-full text-sm border-collapse">
+                      <thead>
+                        <tr className="bg-slate-100">
+                          <th className="border border-slate-300 px-3 py-2 text-left font-semibold text-slate-700">Dự án</th>
+                          <th className="border border-slate-300 px-3 py-2 text-right font-semibold text-slate-700">Thu (VNĐ)</th>
+                          <th className="border border-slate-300 px-3 py-2 text-right font-semibold text-slate-700">Chi (VNĐ)</th>
+                          <th className="border border-slate-300 px-3 py-2 text-right font-semibold text-slate-700">Thu (%)</th>
+                          <th className="border border-slate-300 px-3 py-2 text-right font-semibold text-slate-700">Chi (%)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {financialStats.incomeExpenseRatioData.map((item, index) => (
+                          <tr key={index} className="hover:bg-slate-50">
+                            <td className="border border-slate-300 px-3 py-2 text-slate-700">{item.fullName}</td>
+                            <td className="border border-slate-300 px-3 py-2 text-right text-emerald-600 font-medium">
+                              {new Intl.NumberFormat('vi-VN').format(item.income)} VNĐ
+                            </td>
+                            <td className="border border-slate-300 px-3 py-2 text-right text-rose-600 font-medium">
+                              {new Intl.NumberFormat('vi-VN').format(item.expense)} VNĐ
+                            </td>
+                            <td className="border border-slate-300 px-3 py-2 text-right text-emerald-600 font-semibold">
+                              {item.incomePercent.toFixed(1)}%
+                            </td>
+                            <td className="border border-slate-300 px-3 py-2 text-right text-rose-600 font-semibold">
+                              {item.expensePercent.toFixed(1)}%
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}
@@ -3498,6 +4319,25 @@ export default function App() {
           <CoHoiChoAiView />
         ) : activeView === 'baogia' ? (
           <BaoGiaView />
+        ) : activeView === 'thuchi' ? (
+          <ThuChiView 
+            projects={projects} 
+            employees={employees}
+            onTransactionAdded={async () => {
+              // Reload projects to get updated transactions
+              try {
+                const updatedProjects = await Promise.all(
+                  projects.map(async (p) => {
+                    const transactions = await projectService.loadProjectTransactions(p.id);
+                    return { ...p, transactions };
+                  })
+                );
+                setProjects(updatedProjects);
+              } catch (error) {
+                console.error('Error reloading transactions:', error);
+              }
+            }}
+          />
         ) : (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <EmployeeManager tasks={tasks} projects={projects} />

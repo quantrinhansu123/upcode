@@ -10,6 +10,8 @@ const dbTransactionToApp = (dbTransaction: any): ProjectTransaction => ({
     amount: Number(dbTransaction.amount),
     description: dbTransaction.description,
     transactionDate: dbTransaction.transaction_date,
+    paymentDate: dbTransaction.payment_date || undefined,
+    status: dbTransaction.status || (dbTransaction.type === 'income' ? 'pending' : 'pending'), // Default 'pending' for both income and expense
     recipientId: dbTransaction.recipient_id,
     recipient: dbTransaction.employees ? dbEmployeeToApp(dbTransaction.employees) : undefined,
     receiptImageUrl: dbTransaction.receipt_image_url,
@@ -506,8 +508,10 @@ export const taskService = {
             throw new Error('Task not found');
         }
 
+        const isNowCompleted = !task.isCompleted;
         return this.update(id, {
-            isCompleted: !task.isCompleted,
+            isCompleted: isNowCompleted,
+            completedAt: isNowCompleted ? new Date().toISOString() : null,
         });
     },
 
@@ -590,6 +594,7 @@ export const taskService = {
         // Cập nhật task: đánh dấu hoàn thành và lưu tổng giờ làm việc
         return this.update(id, {
             isCompleted: true,
+            completedAt: new Date().toISOString(),
             hoursWorked: hoursWorked,
             startedAt: null, // Clear legacy started_at
         });
@@ -896,10 +901,10 @@ export const subtaskService = {
     // Toggle subtask completion
     async toggleComplete(id: string): Promise<Subtask> {
         return retryWithBackoff(async () => {
-            // Get current state
+            // Get current state with sessions
             const { data: current, error: fetchError } = await supabase
                 .from('subtasks')
-                .select('*')
+                .select('*, subtask_work_sessions(*)')
                 .eq('id', id)
                 .single();
 
@@ -911,11 +916,26 @@ export const subtaskService = {
                 throw fetchError;
             }
 
+            const willBeCompleted = !current.is_completed;
+
+            // Nếu đang hoàn thành subtask và có session đang chạy, pause nó
+            if (willBeCompleted && current.subtask_work_sessions) {
+                const activeSessions = current.subtask_work_sessions.filter((s: any) => s.started_at && !s.ended_at);
+                if (activeSessions.length > 0) {
+                    // Pause tất cả sessions đang chạy
+                    await supabase
+                        .from('subtask_work_sessions')
+                        .update({ ended_at: new Date().toISOString() })
+                        .eq('subtask_id', id)
+                        .is('ended_at', null);
+                }
+            }
+
             // Toggle completion
             const { data, error } = await supabase
                 .from('subtasks')
                 .update({
-                    is_completed: !current.is_completed
+                    is_completed: willBeCompleted
                 })
                 .eq('id', id)
                 .select('*, subtask_work_sessions(*), employees(*)')
@@ -1168,6 +1188,8 @@ export const projectTransactionService = {
                 amount: transaction.amount,
                 description: transaction.description && transaction.description.trim() ? transaction.description : null,
                 transaction_date: transaction.transactionDate || new Date().toISOString(),
+                payment_date: transaction.paymentDate || null,
+                status: transaction.status || 'pending', // Default 'pending' for both income and expense
                 recipient_id: transaction.recipientId || null,
                 receipt_image_url: transaction.receiptImageUrl || null
             })

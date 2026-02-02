@@ -90,6 +90,8 @@ export interface ProjectTransaction {
   amount: number;
   description?: string;
   transactionDate: string;
+  paymentDate?: string; // Ngày thu (cho income) hoặc ngày sẽ chi (cho expense)
+  status?: 'pending' | 'paid'; // 'pending' = chờ thanh toán/chờ chi, 'paid' = đã thanh toán/đã chi
   recipientId?: string; // Người nhận (chỉ cho expense)
   recipient?: Employee; // Thông tin người nhận
   receiptImageUrl?: string; // URL ảnh hóa đơn (chỉ cho expense)
