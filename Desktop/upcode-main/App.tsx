@@ -2639,7 +2639,7 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
                   <Area 
                     type="monotone" 
                     dataKey="thuDuKien" 
-                    stackId="1"
+                    baseValue={0}
                     stroke="#10b981" 
                     fill="url(#colorThuDuKien)"
                     strokeWidth={2}
@@ -2649,7 +2649,7 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
                   <Area 
                     type="monotone" 
                     dataKey="chiDuKien" 
-                    stackId="1"
+                    baseValue={0}
                     stroke="#ef4444" 
                     fill="url(#colorChiDuKien)"
                     strokeWidth={2}
@@ -2856,7 +2856,7 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
                     <Area 
                       type="monotone" 
                       dataKey="thuDuKien" 
-                      stackId="1"
+                      baseValue={0}
                       stroke="#10b981" 
                       fill="url(#colorThuDuKienFull)"
                       strokeWidth={2}
@@ -2866,7 +2866,7 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
                     <Area 
                       type="monotone" 
                       dataKey="chiDuKien" 
-                      stackId="1"
+                      baseValue={0}
                       stroke="#ef4444" 
                       fill="url(#colorChiDuKienFull)"
                       strokeWidth={2}
