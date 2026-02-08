@@ -1220,6 +1220,74 @@ export const projectTransactionService = {
         return data?.map(dbTransactionToApp) || [];
     },
 
+    // Get all transactions for multiple projects (optimized - single query)
+    async getByProjectIds(projectIds: string[]): Promise<ProjectTransaction[]> {
+        if (projectIds.length === 0) {
+            return [];
+        }
+        
+        const { data, error } = await supabase
+            .from('project_transactions')
+            .select('*, employees(*)')
+            .in('project_id', projectIds)
+            .order('transaction_date', { ascending: false });
+
+        if (error) {
+            console.error('Error fetching transactions:', error);
+            throw error;
+        }
+
+        return data?.map(dbTransactionToApp) || [];
+    },
+
+    // Get all transactions (for ThuChiView - fastest option)
+    async getAll(): Promise<ProjectTransaction[]> {
+        const { data, error } = await supabase
+            .from('project_transactions')
+            .select('*, employees(*)')
+            .order('transaction_date', { ascending: false });
+
+        if (error) {
+            console.error('Error fetching all transactions:', error);
+            throw error;
+        }
+
+        return data?.map(dbTransactionToApp) || [];
+    },
+
+    // Update a transaction
+    async update(id: string, updates: Partial<Omit<ProjectTransaction, 'id' | 'projectId' | 'createdAt'>>): Promise<ProjectTransaction> {
+        const dbUpdates: any = {};
+        if (updates.type !== undefined) dbUpdates.type = updates.type;
+        if (updates.amount !== undefined) dbUpdates.amount = updates.amount;
+        if (updates.description !== undefined) {
+            dbUpdates.description = updates.description && updates.description.trim() ? updates.description : null;
+        }
+        if (updates.transactionDate !== undefined) dbUpdates.transaction_date = updates.transactionDate;
+        if (updates.paymentDate !== undefined) dbUpdates.payment_date = updates.paymentDate || null;
+        if (updates.status !== undefined) dbUpdates.status = updates.status;
+        if (updates.recipientId !== undefined) {
+            dbUpdates.recipient_id = updates.recipientId && updates.recipientId.trim() ? updates.recipientId : null;
+        }
+        if (updates.receiptImageUrl !== undefined) {
+            dbUpdates.receipt_image_url = updates.receiptImageUrl && updates.receiptImageUrl.trim() ? updates.receiptImageUrl : null;
+        }
+
+        const { data, error } = await supabase
+            .from('project_transactions')
+            .update(dbUpdates)
+            .eq('id', id)
+            .select('*, employees(*)')
+            .single();
+
+        if (error) {
+            console.error('Error updating transaction:', error);
+            throw error;
+        }
+
+        return dbTransactionToApp(data);
+    },
+
     // Delete a transaction
     async delete(id: string): Promise<void> {
         const { error } = await supabase

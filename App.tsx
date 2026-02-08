@@ -41,7 +41,9 @@ import {
   Cell,
   Legend,
   LineChart,
-  Line
+  Line,
+  AreaChart,
+  Area
 } from 'recharts';
 import { format, isPast, isToday, parseISO, differenceInMinutes, differenceInHours } from 'date-fns';
 import { vi } from 'date-fns/locale';
@@ -995,18 +997,35 @@ interface ProjectTransactionModalProps {
   project: Project;
   employees: Employee[];
   onClose: () => void;
-  onTransactionAdded: () => void;
+  onTransactionAdded: (transaction?: ProjectTransaction) => void;
+  initialTransaction?: ProjectTransaction;
 }
 
-const ProjectTransactionModal: React.FC<ProjectTransactionModalProps> = ({ project, employees, onClose, onTransactionAdded }) => {
-  const [type, setType] = useState<'income' | 'expense'>('income');
-  const [amount, setAmount] = useState('');
-  const [description, setDescription] = useState('');
-  const [transactionDate, setTransactionDate] = useState(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
-  const [paymentDate, setPaymentDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [status, setStatus] = useState<'pending' | 'paid'>('pending');
-  const [recipientId, setRecipientId] = useState('');
-  const [receiptImageUrl, setReceiptImageUrl] = useState('');
+const ProjectTransactionModal: React.FC<ProjectTransactionModalProps> = ({ project, employees, onClose, onTransactionAdded, initialTransaction }) => {
+  const isEditMode = !!initialTransaction;
+  
+  // Format price with dots (1.000.000)
+  const formatPrice = (value: string) => {
+    const numbers = value.replace(/\D/g, '');
+    return numbers.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  };
+
+  const [type, setType] = useState<'income' | 'expense'>(initialTransaction?.type || 'income');
+  const [amount, setAmount] = useState(initialTransaction ? formatPrice(initialTransaction.amount.toString()) : '');
+  const [description, setDescription] = useState(initialTransaction?.description || '');
+  const [transactionDate, setTransactionDate] = useState(
+    initialTransaction?.transactionDate 
+      ? format(parseISO(initialTransaction.transactionDate), "yyyy-MM-dd'T'HH:mm")
+      : format(new Date(), "yyyy-MM-dd'T'HH:mm")
+  );
+  const [paymentDate, setPaymentDate] = useState(
+    initialTransaction?.paymentDate 
+      ? format(parseISO(initialTransaction.paymentDate), "yyyy-MM-dd")
+      : format(new Date(), "yyyy-MM-dd")
+  );
+  const [status, setStatus] = useState<'pending' | 'paid'>(initialTransaction?.status || 'pending');
+  const [recipientId, setRecipientId] = useState(initialTransaction?.recipientId || '');
+  const [receiptImageUrl, setReceiptImageUrl] = useState(initialTransaction?.receiptImageUrl || '');
   const [isUploading, setIsUploading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [transactions, setTransactions] = useState<ProjectTransaction[]>(project.transactions || []);
@@ -1029,12 +1048,6 @@ const ProjectTransactionModal: React.FC<ProjectTransactionModalProps> = ({ proje
     };
     loadTransactions();
   }, [project.id]);
-
-  // Format price with dots (1.000.000)
-  const formatPrice = (value: string) => {
-    const numbers = value.replace(/\D/g, '');
-    return numbers.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  };
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const formatted = formatPrice(e.target.value);
@@ -1097,30 +1110,49 @@ const ProjectTransactionModal: React.FC<ProjectTransactionModalProps> = ({ proje
 
     setLoading(true);
     try {
-      const newTransaction = await projectTransactionService.create(project.id, {
-        type,
-        amount: transactionAmount,
-        description: description.trim() || undefined,
-        transactionDate: transactionDate ? new Date(transactionDate).toISOString() : new Date().toISOString(),
-        paymentDate: paymentDate ? new Date(paymentDate).toISOString() : undefined,
-        status: status,
-        recipientId: type === 'expense' ? recipientId : undefined,
-        receiptImageUrl: type === 'expense' && receiptImageUrl ? receiptImageUrl : undefined
-      });
-      // Update local transactions state
-      setTransactions([newTransaction, ...transactions]);
-      // Reset form
-      setAmount('');
-      setDescription('');
-      setPaymentDate(format(new Date(), "yyyy-MM-dd"));
-      setStatus('pending');
-      setTransactionDate(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
-      setRecipientId('');
-      setReceiptImageUrl('');
-      onTransactionAdded();
+      if (isEditMode && initialTransaction) {
+        // Update existing transaction
+        const updatedTransaction = await projectTransactionService.update(initialTransaction.id, {
+          type,
+          amount: transactionAmount,
+          description: description.trim() || undefined,
+          transactionDate: transactionDate ? new Date(transactionDate).toISOString() : new Date().toISOString(),
+          paymentDate: paymentDate ? new Date(paymentDate).toISOString() : undefined,
+          status: status,
+          recipientId: type === 'expense' ? recipientId : undefined,
+          receiptImageUrl: type === 'expense' && receiptImageUrl ? receiptImageUrl : undefined
+        });
+        // Update local transactions state
+        setTransactions(transactions.map(t => t.id === initialTransaction.id ? updatedTransaction : t));
+        onTransactionAdded(updatedTransaction);
+        onClose();
+      } else {
+        // Create new transaction
+        const newTransaction = await projectTransactionService.create(project.id, {
+          type,
+          amount: transactionAmount,
+          description: description.trim() || undefined,
+          transactionDate: transactionDate ? new Date(transactionDate).toISOString() : new Date().toISOString(),
+          paymentDate: paymentDate ? new Date(paymentDate).toISOString() : undefined,
+          status: status,
+          recipientId: type === 'expense' ? recipientId : undefined,
+          receiptImageUrl: type === 'expense' && receiptImageUrl ? receiptImageUrl : undefined
+        });
+        // Update local transactions state
+        setTransactions([newTransaction, ...transactions]);
+        // Reset form
+        setAmount('');
+        setDescription('');
+        setPaymentDate(format(new Date(), "yyyy-MM-dd"));
+        setStatus('pending');
+        setTransactionDate(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+        setRecipientId('');
+        setReceiptImageUrl('');
+        onTransactionAdded(newTransaction);
+      }
     } catch (error: any) {
-      console.error('Error creating transaction:', error);
-      alert('Không thể tạo giao dịch. Vui lòng thử lại.');
+      console.error(`Error ${isEditMode ? 'updating' : 'creating'} transaction:`, error);
+      alert(`Không thể ${isEditMode ? 'cập nhật' : 'tạo'} giao dịch. Vui lòng thử lại.`);
     } finally {
       setLoading(false);
     }
@@ -1139,7 +1171,7 @@ const ProjectTransactionModal: React.FC<ProjectTransactionModalProps> = ({ proje
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-2xl font-bold text-slate-900">Thu chi dự án</h3>
+          <h3 className="text-2xl font-bold text-slate-900">{isEditMode ? 'Sửa giao dịch' : 'Thu chi dự án'}</h3>
           <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full text-slate-500"><X size={20} /></button>
         </div>
         <div className="space-y-4">
@@ -1412,7 +1444,7 @@ const ProjectTransactionModal: React.FC<ProjectTransactionModalProps> = ({ proje
                   : 'bg-rose-600 hover:bg-rose-700'
               }`}
             >
-              {loading ? 'Đang xử lý...' : 'Xác nhận'}
+              {loading ? 'Đang xử lý...' : (isEditMode ? 'Cập nhật' : 'Xác nhận')}
             </button>
           </div>
         </div>
@@ -1805,33 +1837,30 @@ const TaskModal: React.FC<TaskModalProps> = ({ onClose, onSubmit, projects, init
 interface ThuChiViewProps {
   projects: Project[];
   employees: Employee[];
-  onTransactionAdded: () => void;
+  onTransactionAdded: (transaction?: ProjectTransaction) => void;
 }
 
 const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransactionAdded }) => {
   const [selectedProjectId, setSelectedProjectId] = useState<string | 'all'>('all');
   const [transactionType, setTransactionType] = useState<'all' | 'income' | 'expense'>('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'paid'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'paid' | 'overdue'>('all');
   const [dateFilter, setDateFilter] = useState<'all' | 'thisMonth' | 'thisQuarter' | 'thisYear' | 'custom'>('all');
   const [customDateStart, setCustomDateStart] = useState('');
   const [customDateEnd, setCustomDateEnd] = useState('');
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [selectedProjectForTransaction, setSelectedProjectForTransaction] = useState<Project | null>(null);
+  const [editingTransaction, setEditingTransaction] = useState<ProjectTransaction | null>(null);
   const [allTransactions, setAllTransactions] = useState<ProjectTransaction[]>([]);
   const [loading, setLoading] = useState(false);
+  const [selectedChartDate, setSelectedChartDate] = useState<string | null>(null);
 
-  // Load all transactions
+  // Load all transactions (optimized - single query instead of multiple)
   useEffect(() => {
     const loadTransactions = async () => {
       setLoading(true);
       try {
-        const transactions: ProjectTransaction[] = [];
-        for (const project of projects) {
-          const projectTransactions = await projectService.loadProjectTransactions(project.id);
-          transactions.push(...projectTransactions);
-        }
-        // Sort by transaction date (newest first)
-        transactions.sort((a, b) => new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime());
+        // Load all transactions in one query (much faster than looping through projects)
+        const transactions = await projectTransactionService.getAll();
         setAllTransactions(transactions);
       } catch (error) {
         console.error('Error loading transactions:', error);
@@ -1843,31 +1872,26 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
     loadTransactions();
   }, [projects]);
 
-  // Filter transactions
+  // Check if transaction is overdue (only for expense with pending status) - memoized
+  const isOverdue = useCallback((transaction: ProjectTransaction): boolean => {
+    if (transaction.type !== 'expense' || transaction.status !== 'pending' || !transaction.paymentDate) {
+      return false;
+    }
+    const paymentDate = new Date(transaction.paymentDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    paymentDate.setHours(0, 0, 0, 0);
+    return paymentDate < today;
+  }, []);
+
+  // Filter transactions (optimized - single pass filtering)
   const filteredTransactions = useMemo(() => {
-    let filtered = allTransactions;
-
-    // Filter by project
-    if (selectedProjectId !== 'all') {
-      filtered = filtered.filter(t => t.projectId === selectedProjectId);
-    }
-
-    // Filter by type
-    if (transactionType !== 'all') {
-      filtered = filtered.filter(t => t.type === transactionType);
-    }
-
-    // Filter by status
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(t => t.status === statusFilter);
-    }
-
-    // Filter by date
+    // Pre-calculate date range if needed
+    let dateStart: Date | null = null;
+    let dateEnd: Date | null = null;
+    
     if (dateFilter !== 'all') {
       const now = new Date();
-      let dateStart: Date | null = null;
-      let dateEnd: Date | null = null;
-
       if (dateFilter === 'thisMonth') {
         dateStart = new Date(now.getFullYear(), now.getMonth(), 1);
         dateEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
@@ -1883,24 +1907,62 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
         dateEnd = new Date(customDateEnd);
         dateEnd.setHours(23, 59, 59);
       }
-
-      if (dateStart && dateEnd) {
-        filtered = filtered.filter(t => {
-          const checkDate = t.paymentDate ? new Date(t.paymentDate) : new Date(t.transactionDate);
-          return checkDate >= dateStart! && checkDate <= dateEnd!;
-        });
-      }
     }
 
+    // Single pass filtering (much faster than multiple filters)
+    let filtered = allTransactions.filter(t => {
+      // Filter by project
+      if (selectedProjectId !== 'all' && t.projectId !== selectedProjectId) return false;
+      
+      // Filter by type
+      if (transactionType !== 'all' && t.type !== transactionType) return false;
+      
+      // Filter by status
+      if (statusFilter !== 'all') {
+        if (statusFilter === 'overdue') {
+          if (!isOverdue(t)) return false;
+        } else if (t.status !== statusFilter) {
+          return false;
+        }
+      }
+      
+      // Filter by date range
+      if (dateStart && dateEnd) {
+        const checkDate = t.paymentDate ? new Date(t.paymentDate) : new Date(t.transactionDate);
+        if (checkDate < dateStart || checkDate > dateEnd) return false;
+      }
+      
+      // Filter by selected chart date if any (ưu tiên cao nhất)
+      if (selectedChartDate) {
+        const dateToUse = t.paymentDate || t.transactionDate;
+        const dateKey = format(parseISO(dateToUse), 'yyyy-MM-dd');
+        if (dateKey !== selectedChartDate) return false;
+      }
+      
+      return true;
+    });
+    
     return filtered;
-  }, [allTransactions, selectedProjectId, transactionType, statusFilter, dateFilter, customDateStart, customDateEnd]);
+  }, [allTransactions, selectedProjectId, transactionType, statusFilter, dateFilter, customDateStart, customDateEnd, isOverdue, selectedChartDate]);
 
-  // Calculate totals
+  // Calculate totals (optimized - single pass calculation)
   const totals = useMemo(() => {
-    const incomePaid = filteredTransactions.filter(t => t.type === 'income' && t.status === 'paid').reduce((sum, t) => sum + t.amount, 0);
-    const incomePending = filteredTransactions.filter(t => t.type === 'income' && t.status === 'pending').reduce((sum, t) => sum + t.amount, 0);
-    const expensePaid = filteredTransactions.filter(t => t.type === 'expense' && t.status === 'paid').reduce((sum, t) => sum + t.amount, 0);
-    const expensePending = filteredTransactions.filter(t => t.type === 'expense' && t.status === 'pending').reduce((sum, t) => sum + t.amount, 0);
+    let incomePaid = 0;
+    let incomePending = 0;
+    let expensePaid = 0;
+    let expensePending = 0;
+    
+    // Single pass through transactions
+    for (const t of filteredTransactions) {
+      if (t.type === 'income') {
+        if (t.status === 'paid') incomePaid += t.amount;
+        else if (t.status === 'pending') incomePending += t.amount;
+      } else if (t.type === 'expense') {
+        if (t.status === 'paid') expensePaid += t.amount;
+        else if (t.status === 'pending') expensePending += t.amount;
+      }
+    }
+    
     return {
       incomePaid,
       incomePending,
@@ -1914,15 +1976,92 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
     return new Intl.NumberFormat('vi-VN').format(amount);
   };
 
+  // Prepare cash flow chart data (chỉ cho thu chi dự kiến - pending)
+  const cashFlowData = useMemo(() => {
+    // Group transactions by date - chỉ lấy các giao dịch pending
+    const dateMap = new Map<string, { income: number; expense: number; date: Date }>();
+    
+    filteredTransactions.forEach(t => {
+      // Chỉ tính các giao dịch có status là pending
+      if (t.status !== 'pending') return;
+      
+      // Sử dụng paymentDate nếu có, nếu không thì dùng transactionDate
+      const dateToUse = t.paymentDate || t.transactionDate;
+      const dateKey = format(parseISO(dateToUse), 'yyyy-MM-dd');
+      const date = parseISO(dateToUse);
+      
+      if (!dateMap.has(dateKey)) {
+        dateMap.set(dateKey, { income: 0, expense: 0, date });
+      }
+      
+      const entry = dateMap.get(dateKey)!;
+      if (t.type === 'income') {
+        entry.income += t.amount;
+      } else if (t.type === 'expense') {
+        entry.expense += t.amount;
+      }
+    });
+    
+    // Convert to array and sort by date
+    let data = Array.from(dateMap.values())
+      .map(entry => ({
+        date: format(entry.date, 'dd/MM/yyyy', { locale: vi }),
+        dateKey: format(entry.date, 'yyyy-MM-dd'),
+        dateValue: entry.date.getTime(),
+        income: entry.income,
+        expense: entry.expense,
+        balance: entry.income - entry.expense
+      }))
+      .sort((a, b) => a.dateValue - b.dateValue);
+    
+    // Tính dòng tiền lũy kế (cumulative cash flow)
+    let cumulativeBalance = 0;
+    data = data.map(entry => {
+      cumulativeBalance += entry.balance;
+      return {
+        ...entry,
+        cumulativeBalance: cumulativeBalance
+      };
+    });
+    
+    return data;
+  }, [filteredTransactions]);
+
   const handleAddTransaction = (project: Project) => {
     setSelectedProjectForTransaction(project);
+    setEditingTransaction(null);
     setIsTransactionModalOpen(true);
+  };
+
+  const handleEditTransaction = (transaction: ProjectTransaction) => {
+    const project = projects.find(p => p.id === transaction.projectId);
+    if (project) {
+      setSelectedProjectForTransaction(project);
+      setEditingTransaction(transaction);
+      setIsTransactionModalOpen(true);
+    }
+  };
+
+  const handleDeleteTransaction = async (transaction: ProjectTransaction) => {
+    if (!confirm(`Bạn có chắc chắn muốn xóa giao dịch này?`)) {
+      return;
+    }
+
+    try {
+      await projectTransactionService.delete(transaction.id);
+      // Update local state instead of reloading
+      setAllTransactions(prev => prev.filter(t => t.id !== transaction.id));
+      onTransactionAdded();
+    } catch (error) {
+      console.error('Error deleting transaction:', error);
+      alert('Không thể xóa giao dịch. Vui lòng thử lại.');
+    }
   };
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="px-4 py-3 bg-emerald-50 rounded-lg border-2 border-emerald-200">
           <div className="text-xs font-semibold text-emerald-700 uppercase mb-1">Tổng thu (đã thanh toán)</div>
           <div className="text-lg font-black text-emerald-600">{formatCurrency(totals.incomePaid)} VNĐ</div>
@@ -1934,6 +2073,10 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
         <div className="px-4 py-3 bg-rose-50 rounded-lg border-2 border-rose-200">
           <div className="text-xs font-semibold text-rose-700 uppercase mb-1">Tổng chi (đã chi)</div>
           <div className="text-lg font-black text-rose-600">{formatCurrency(totals.expensePaid)} VNĐ</div>
+        </div>
+        <div className="px-4 py-3 bg-orange-50 rounded-lg border-2 border-orange-200">
+          <div className="text-xs font-semibold text-orange-700 uppercase mb-1">Tổng chi (chờ thanh toán)</div>
+          <div className="text-lg font-black text-orange-600">{formatCurrency(totals.expensePending)} VNĐ</div>
         </div>
         <div className={`px-4 py-3 rounded-lg border-2 ${totals.balance >= 0 ? 'bg-indigo-50 border-indigo-200' : 'bg-rose-50 border-rose-200'}`}>
           <div className={`text-xs font-semibold uppercase mb-1 ${totals.balance >= 0 ? 'text-indigo-700' : 'text-rose-700'}`}>Số dư</div>
@@ -1973,12 +2116,13 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
             <label className="block text-xs font-medium text-slate-700 mb-1">Trạng thái</label>
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as 'all' | 'pending' | 'paid')}
+              onChange={(e) => setStatusFilter(e.target.value as 'all' | 'pending' | 'paid' | 'overdue')}
               className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
             >
               <option value="all">Tất cả</option>
               <option value="pending">Chờ</option>
               <option value="paid">Đã thanh toán</option>
+              <option value="overdue">Quá hạn</option>
             </select>
           </div>
           <div>
@@ -2028,7 +2172,16 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
         <button
           onClick={() => {
             if (projects.length > 0) {
-              handleAddTransaction(projects[0]);
+              // Nếu có dự án đang được lọc, dùng dự án đó
+              let projectToUse: Project | null = null;
+              if (selectedProjectId !== 'all') {
+                projectToUse = projects.find(p => p.id === selectedProjectId) || null;
+              }
+              // Nếu không có dự án được lọc, dùng dự án đầu tiên
+              if (!projectToUse) {
+                projectToUse = projects[0];
+              }
+              handleAddTransaction(projectToUse);
             } else {
               alert('Vui lòng tạo dự án trước khi thêm transaction');
             }
@@ -2039,6 +2192,147 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
           Thêm thu chi
         </button>
       </div>
+
+      {/* Cash Flow Chart - Chỉ hiển thị thu chi dự kiến (Biểu đồ miền) */}
+      {cashFlowData.length > 0 && (
+        <div className="bg-white rounded-xl border-2 border-slate-200 shadow-sm p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-slate-700">Biểu đồ dòng tiền dự kiến</h3>
+            {selectedChartDate && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-slate-600">
+                  Đang xem: {format(parseISO(selectedChartDate), 'dd/MM/yyyy', { locale: vi })}
+                </span>
+                <button
+                  onClick={() => setSelectedChartDate(null)}
+                  className="text-xs text-indigo-600 hover:text-indigo-700 font-medium px-2 py-1 rounded hover:bg-indigo-50"
+                >
+                  Xóa lọc
+                </button>
+              </div>
+            )}
+          </div>
+          <ResponsiveContainer width="100%" height={300}>
+            <AreaChart 
+              data={cashFlowData} 
+              margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+              onClick={(data: any) => {
+                console.log('Chart clicked:', data);
+                if (data && data.activePayload && data.activePayload[0]) {
+                  const clickedData = data.activePayload[0].payload;
+                  console.log('Clicked data:', clickedData);
+                  if (clickedData.dateKey) {
+                    console.log('Setting selectedChartDate to:', clickedData.dateKey);
+                    setSelectedChartDate(clickedData.dateKey);
+                  }
+                }
+              }}
+              style={{ cursor: 'pointer' }}
+            >
+              <defs>
+                <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                </linearGradient>
+                <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+                </linearGradient>
+                <linearGradient id="colorCumulative" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis 
+                dataKey="date" 
+                stroke="#64748b"
+                fontSize={12}
+                angle={-45}
+                textAnchor="end"
+                height={80}
+              />
+              <YAxis 
+                stroke="#64748b"
+                fontSize={12}
+                tickFormatter={(value) => `${(value / 1000000).toFixed(1)}M`}
+              />
+              <Tooltip 
+                formatter={(value: number, name: string) => {
+                  const label = name === 'income' ? 'Thu dự kiến' : 
+                               name === 'expense' ? 'Chi dự kiến' : 
+                               name === 'cumulativeBalance' ? 'Dòng tiền lũy kế' : name;
+                  return [formatCurrency(value), label];
+                }}
+                contentStyle={{ backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer' }}
+                onClick={(data: any) => {
+                  console.log('Tooltip clicked:', data);
+                  if (data && data.payload && data.payload.dateKey) {
+                    console.log('Setting selectedChartDate to:', data.payload.dateKey);
+                    setSelectedChartDate(data.payload.dateKey);
+                  }
+                }}
+              />
+              <Legend 
+                formatter={(value) => {
+                  if (value === 'income') return 'Thu dự kiến';
+                  if (value === 'expense') return 'Chi dự kiến';
+                  if (value === 'cumulativeBalance') return 'Dòng tiền lũy kế';
+                  return value;
+                }}
+              />
+              <Area 
+                type="monotone" 
+                dataKey="income" 
+                stroke="#10b981" 
+                strokeWidth={2}
+                fillOpacity={1}
+                fill="url(#colorIncome)"
+                name="income"
+                onClick={(data: any) => {
+                  console.log('Area clicked:', data);
+                  if (data && data.dateKey) {
+                    setSelectedChartDate(data.dateKey);
+                  }
+                }}
+              />
+              <Area 
+                type="monotone" 
+                dataKey="expense" 
+                stroke="#ef4444" 
+                strokeWidth={2}
+                fillOpacity={1}
+                fill="url(#colorExpense)"
+                name="expense"
+                onClick={(data: any) => {
+                  console.log('Area clicked:', data);
+                  if (data && data.dateKey) {
+                    setSelectedChartDate(data.dateKey);
+                  }
+                }}
+              />
+              <Area 
+                type="monotone" 
+                dataKey="cumulativeBalance" 
+                stroke="#6366f1" 
+                strokeWidth={2}
+                fillOpacity={1}
+                fill="url(#colorCumulative)"
+                name="cumulativeBalance"
+                onClick={(data: any) => {
+                  console.log('Area clicked:', data);
+                  if (data && data.dateKey) {
+                    setSelectedChartDate(data.dateKey);
+                  }
+                }}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+          <p className="text-xs text-slate-500 mt-2 text-center">
+            💡 Click vào biểu đồ để xem chi tiết giao dịch của ngày đó
+          </p>
+        </div>
+      )}
 
       {/* Transactions List */}
       <div className="bg-white rounded-xl border-2 border-slate-200 shadow-sm">
@@ -2091,31 +2385,47 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
                         {formatCurrency(transaction.amount)} VNĐ
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                          transaction.status === 'paid' 
-                            ? 'bg-indigo-100 text-indigo-700' 
-                            : 'bg-amber-100 text-amber-700'
-                        }`}>
-                          {transaction.status === 'paid' 
-                            ? (transaction.type === 'income' ? 'Đã thanh toán' : 'Đã chi') 
-                            : (transaction.type === 'income' ? 'Chờ thanh toán' : 'Chờ chi')}
-                        </span>
+                        {(() => {
+                          const overdue = isOverdue(transaction);
+                          if (transaction.status === 'paid') {
+                            return (
+                              <span className="px-2 py-1 rounded text-xs font-semibold bg-indigo-100 text-indigo-700">
+                                {transaction.type === 'income' ? 'Đã thanh toán' : 'Đã chi'}
+                              </span>
+                            );
+                          } else if (overdue) {
+                            return (
+                              <span className="px-2 py-1 rounded text-xs font-semibold bg-rose-100 text-rose-700">
+                                Quá hạn
+                              </span>
+                            );
+                          } else {
+                            return (
+                              <span className="px-2 py-1 rounded text-xs font-semibold bg-amber-100 text-amber-700">
+                                {transaction.type === 'income' ? 'Chờ thanh toán' : 'Chờ chi'}
+                              </span>
+                            );
+                          }
+                        })()}
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-600">
                         {transaction.description || '-'}
                       </td>
                       <td className="px-4 py-3">
-                        <button
-                          onClick={() => {
-                            const project = projects.find(p => p.id === transaction.projectId);
-                            if (project) {
-                              handleAddTransaction(project);
-                            }
-                          }}
-                          className="text-indigo-600 hover:text-indigo-700 text-xs font-medium"
-                        >
-                          Sửa
-                        </button>
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => handleEditTransaction(transaction)}
+                            className="text-indigo-600 hover:text-indigo-700 text-xs font-medium"
+                          >
+                            Sửa
+                          </button>
+                          <button
+                            onClick={() => handleDeleteTransaction(transaction)}
+                            className="text-rose-600 hover:text-rose-700 text-xs font-medium"
+                          >
+                            Xóa
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -2131,20 +2441,34 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
         <ProjectTransactionModal
           project={selectedProjectForTransaction}
           employees={employees}
+          initialTransaction={editingTransaction || undefined}
           onClose={() => {
             setIsTransactionModalOpen(false);
             setSelectedProjectForTransaction(null);
+            setEditingTransaction(null);
           }}
-          onTransactionAdded={async () => {
-            onTransactionAdded();
-            // Reload transactions
-            const transactions: ProjectTransaction[] = [];
-            for (const project of projects) {
-              const projectTransactions = await projectService.loadProjectTransactions(project.id);
-              transactions.push(...projectTransactions);
+          onTransactionAdded={(newTransaction) => {
+            if (newTransaction) {
+              // Update local state instead of reloading
+              setAllTransactions(prev => {
+                const existingIndex = prev.findIndex(t => t.id === newTransaction.id);
+                if (existingIndex >= 0) {
+                  // Update existing transaction
+                  const updated = [...prev];
+                  updated[existingIndex] = newTransaction;
+                  // Sort by transaction date (newest first)
+                  updated.sort((a, b) => new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime());
+                  return updated;
+                } else {
+                  // Add new transaction
+                  const updated = [newTransaction, ...prev];
+                  // Sort by transaction date (newest first)
+                  updated.sort((a, b) => new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime());
+                  return updated;
+                }
+              });
             }
-            transactions.sort((a, b) => new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime());
-            setAllTransactions(transactions);
+            onTransactionAdded(newTransaction);
           }}
         />
       )}
@@ -2388,7 +2712,7 @@ export default function App() {
     loadProjectTransactions();
   }, [activeProjectId, activeView]);
 
-  // Load transactions for all projects when showing financial dashboard
+  // Load transactions for all projects when showing financial dashboard (optimized)
   useEffect(() => {
     const loadAllProjectTransactions = async () => {
       if (activeView === 'dashboard' && activeProjectId === 'all' && projects.length > 0) {
@@ -2396,22 +2720,26 @@ export default function App() {
         if (projectsWithoutTransactions.length > 0) {
           try {
             console.log('📦 Loading transactions for all projects for financial dashboard...');
-            const projectsWithTransactions = await Promise.all(
-              projectsWithoutTransactions.map(async (project) => {
-                try {
-                  const transactions = await projectService.loadProjectTransactions(project.id);
-                  return { ...project, transactions };
-                } catch (error) {
-                  console.error(`Error loading transactions for project ${project.id}:`, error);
-                  return { ...project, transactions: [] };
-                }
-              })
-            );
+            // Optimized: Load all transactions in one query instead of multiple queries
+            const projectIds = projectsWithoutTransactions.map(p => p.id);
+            const allTransactions = await projectTransactionService.getByProjectIds(projectIds);
             
+            // Group transactions by project ID
+            const transactionsByProject = new Map<string, ProjectTransaction[]>();
+            allTransactions.forEach(t => {
+              const existing = transactionsByProject.get(t.projectId) || [];
+              existing.push(t);
+              transactionsByProject.set(t.projectId, existing);
+            });
+            
+            // Update projects with their transactions
             setProjects(prevProjects => 
               prevProjects.map(p => {
-                const updated = projectsWithTransactions.find(up => up.id === p.id);
-                return updated || p;
+                const transactions = transactionsByProject.get(p.id) || [];
+                if (transactions.length > 0 || !p.transactions || p.transactions.length === 0) {
+                  return { ...p, transactions };
+                }
+                return p;
               })
             );
             console.log('✅ Transactions loaded for financial dashboard');
@@ -2423,7 +2751,7 @@ export default function App() {
     };
 
     loadAllProjectTransactions();
-  }, [activeView, activeProjectId]); // Only trigger when view or project selection changes
+  }, [activeView, activeProjectId, projects.length]); // Only trigger when view or project selection changes
 
   // Auto-pause all active sessions when page unloads
   useEffect(() => {
@@ -2618,6 +2946,27 @@ export default function App() {
 
     return { total, completed, pending, overdue, totalHours };
   }, [filteredTasks]);
+
+  // Memoize tasks by project for faster lookup in sidebar
+  const tasksByProject = useMemo(() => {
+    const map = new Map<string, Task[]>();
+    tasks.forEach(t => {
+      const pid = t.projectId || 'uncategorized';
+      if (!map.has(pid)) map.set(pid, []);
+      map.get(pid)!.push(t);
+    });
+    return map;
+  }, [tasks]);
+
+  // Memoize filtered projects for sidebar
+  const filteredProjects = useMemo(() => {
+    if (!projectSearchQuery) return projects;
+    const query = projectSearchQuery.toLowerCase();
+    return projects.filter(p => 
+      p.name.toLowerCase().includes(query) ||
+      (p.description && p.description.toLowerCase().includes(query))
+    );
+  }, [projects, projectSearchQuery]);
 
   // Tính toán các chỉ số tài chính tổng hợp với bộ lọc thời gian
   const financialStats = useMemo(() => {
@@ -3288,11 +3637,6 @@ export default function App() {
             </div>
             {/* Filtered projects as cards */}
             {(() => {
-              const filteredProjects = projects.filter(p => 
-                p.name.toLowerCase().includes(projectSearchQuery.toLowerCase()) ||
-                (p.description && p.description.toLowerCase().includes(projectSearchQuery.toLowerCase()))
-              );
-              
               if (filteredProjects.length === 0 && projectSearchQuery) {
                 return (
                   <div className="px-2 py-4 text-center text-xs text-slate-400">
@@ -3304,14 +3648,30 @@ export default function App() {
               return (
                 <div className="grid grid-cols-1 gap-2 px-2">
                   {filteredProjects.map(p => {
-                    const pTasks = tasks.filter(t => t.projectId === p.id);
+                    // Use memoized tasks map instead of filtering
+                    const pTasks = tasksByProject.get(p.id) || [];
                     const total = pTasks.length;
-                    const completed = pTasks.filter(t => t.isCompleted).length;
+                    // Single pass to count completed
+                    let completed = 0;
+                    for (const t of pTasks) {
+                      if (t.isCompleted) completed++;
+                    }
                     const percent = total > 0 ? (completed / total) * 100 : 0;
-                    // Chỉ tính income đã thanh toán
-                    const totalIncome = p.transactions?.filter(t => t.type === 'income' && t.status === 'paid').reduce((sum, t) => sum + t.amount, 0) || 0;
-                    const totalIncomePending = p.transactions?.filter(t => t.type === 'income' && t.status === 'pending').reduce((sum, t) => sum + t.amount, 0) || 0;
-                    const totalExpense = p.transactions?.filter(t => t.type === 'expense' && t.status === 'paid').reduce((sum, t) => sum + t.amount, 0) || 0;
+                    
+                    // Optimized transaction calculations - single pass
+                    let totalIncome = 0;
+                    let totalIncomePending = 0;
+                    let totalExpense = 0;
+                    if (p.transactions) {
+                      for (const t of p.transactions) {
+                        if (t.type === 'income') {
+                          if (t.status === 'paid') totalIncome += t.amount;
+                          else if (t.status === 'pending') totalIncomePending += t.amount;
+                        } else if (t.type === 'expense' && t.status === 'paid') {
+                          totalExpense += t.amount;
+                        }
+                      }
+                    }
                     const balance = totalIncome - totalExpense;
                     const amountToCollect = p.price && p.price > 0 ? p.price - totalIncome + totalIncomePending : totalIncomePending;
                     
@@ -4323,18 +4683,26 @@ export default function App() {
           <ThuChiView 
             projects={projects} 
             employees={employees}
-            onTransactionAdded={async () => {
-              // Reload projects to get updated transactions
-              try {
-                const updatedProjects = await Promise.all(
-                  projects.map(async (p) => {
-                    const transactions = await projectService.loadProjectTransactions(p.id);
-                    return { ...p, transactions };
+            onTransactionAdded={(newTransaction) => {
+              // Update local state instead of reloading
+              if (newTransaction) {
+                setProjects(prevProjects => 
+                  prevProjects.map(p => {
+                    if (p.id === newTransaction.projectId) {
+                      const existingIndex = p.transactions?.findIndex(t => t.id === newTransaction.id) ?? -1;
+                      if (existingIndex >= 0 && p.transactions) {
+                        // Update existing transaction
+                        const updated = [...p.transactions];
+                        updated[existingIndex] = newTransaction;
+                        return { ...p, transactions: updated };
+                      } else {
+                        // Add new transaction
+                        return { ...p, transactions: [newTransaction, ...(p.transactions || [])] };
+                      }
+                    }
+                    return p;
                   })
                 );
-                setProjects(updatedProjects);
-              } catch (error) {
-                console.error('Error reloading transactions:', error);
               }
             }}
           />
@@ -4380,21 +4748,26 @@ export default function App() {
               setIsTransactionModalOpen(false);
               setSelectedProjectForTransaction(null);
             }}
-            onTransactionAdded={async () => {
-              // Reload transactions for the project
-              if (selectedProjectForTransaction) {
-                try {
-                  const transactions = await projectService.loadProjectTransactions(selectedProjectForTransaction.id);
-                  setProjects(prevProjects => 
-                    prevProjects.map(p => 
-                      p.id === selectedProjectForTransaction.id 
-                        ? { ...p, transactions }
-                        : p
-                    )
-                  );
-                } catch (error) {
-                  console.error('Error reloading transactions:', error);
-                }
+            onTransactionAdded={(newTransaction) => {
+              // Update local state instead of reloading
+              if (selectedProjectForTransaction && newTransaction) {
+                setProjects(prevProjects => 
+                  prevProjects.map(p => {
+                    if (p.id === selectedProjectForTransaction.id) {
+                      const existingIndex = p.transactions?.findIndex(t => t.id === newTransaction.id) ?? -1;
+                      if (existingIndex >= 0 && p.transactions) {
+                        // Update existing transaction
+                        const updated = [...p.transactions];
+                        updated[existingIndex] = newTransaction;
+                        return { ...p, transactions: updated };
+                      } else {
+                        // Add new transaction
+                        return { ...p, transactions: [newTransaction, ...(p.transactions || [])] };
+                      }
+                    }
+                    return p;
+                  })
+                );
               }
               setIsTransactionModalOpen(false);
               setSelectedProjectForTransaction(null);
