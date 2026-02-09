@@ -2086,7 +2086,7 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
 
       {/* Filters */}
       <div className="bg-white rounded-xl border-2 border-slate-200 shadow-sm p-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 mb-3">
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1">Dự án</label>
             <select
@@ -2162,6 +2162,58 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
                   className="flex-1 px-2 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                 />
               </>
+            )}
+          </div>
+        </div>
+        
+        {/* Bộ lọc từ ngày đến ngày - Luôn hiển thị */}
+        <div className="border-t border-slate-200 pt-3 mt-3">
+          <label className="block text-xs font-medium text-slate-700 mb-2">Lọc theo khoảng thời gian</label>
+          <div className="flex items-center gap-3">
+            <div className="flex-1">
+              <label className="block text-xs text-slate-600 mb-1">Từ ngày</label>
+              <input
+                type="date"
+                value={customDateStart}
+                onChange={(e) => {
+                  setCustomDateStart(e.target.value);
+                  if (e.target.value) {
+                    setDateFilter('custom');
+                  }
+                }}
+                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              />
+            </div>
+            <div className="pt-6">
+              <span className="text-slate-400">→</span>
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs text-slate-600 mb-1">Đến ngày</label>
+              <input
+                type="date"
+                value={customDateEnd}
+                onChange={(e) => {
+                  setCustomDateEnd(e.target.value);
+                  if (e.target.value) {
+                    setDateFilter('custom');
+                  }
+                }}
+                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              />
+            </div>
+            {(customDateStart || customDateEnd) && (
+              <div className="pt-6">
+                <button
+                  onClick={() => {
+                    setCustomDateStart('');
+                    setCustomDateEnd('');
+                    setDateFilter('all');
+                  }}
+                  className="px-3 py-2 text-xs text-slate-600 hover:text-slate-800 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  Xóa
+                </button>
+              </div>
             )}
           </div>
         </div>
