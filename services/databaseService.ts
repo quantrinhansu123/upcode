@@ -15,6 +15,8 @@ const dbTransactionToApp = (dbTransaction: any): ProjectTransaction => ({
     recipientId: dbTransaction.recipient_id,
     recipient: dbTransaction.employees ? dbEmployeeToApp(dbTransaction.employees) : undefined,
     receiptImageUrl: dbTransaction.receipt_image_url,
+    parentTransactionId: dbTransaction.parent_transaction_id || undefined,
+    feasibilityPercentage: dbTransaction.feasibility_percentage !== null && dbTransaction.feasibility_percentage !== undefined ? Number(dbTransaction.feasibility_percentage) : undefined,
     createdAt: dbTransaction.created_at
 });
 
@@ -1191,13 +1193,21 @@ export const projectTransactionService = {
                 payment_date: transaction.paymentDate || null,
                 status: transaction.status || 'pending', // Default 'pending' for both income and expense
                 recipient_id: transaction.recipientId || null,
-                receipt_image_url: transaction.receiptImageUrl || null
+                receipt_image_url: transaction.receiptImageUrl || null,
+                parent_transaction_id: transaction.parentTransactionId || null,
+                feasibility_percentage: transaction.feasibilityPercentage !== undefined && transaction.feasibilityPercentage !== null ? transaction.feasibilityPercentage : null
             })
             .select('*, employees(*)')
             .single();
 
         if (error) {
             console.error('Error creating transaction:', error);
+            console.error('Error details:', {
+                message: error.message,
+                details: error.details,
+                hint: error.hint,
+                code: error.code
+            });
             throw error;
         }
 
@@ -1271,6 +1281,9 @@ export const projectTransactionService = {
         }
         if (updates.receiptImageUrl !== undefined) {
             dbUpdates.receipt_image_url = updates.receiptImageUrl && updates.receiptImageUrl.trim() ? updates.receiptImageUrl : null;
+        }
+        if (updates.feasibilityPercentage !== undefined) {
+            dbUpdates.feasibility_percentage = updates.feasibilityPercentage !== null && updates.feasibilityPercentage !== undefined ? updates.feasibilityPercentage : null;
         }
 
         const { data, error } = await supabase

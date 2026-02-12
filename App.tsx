@@ -1026,6 +1026,7 @@ const ProjectTransactionModal: React.FC<ProjectTransactionModalProps> = ({ proje
   const [status, setStatus] = useState<'pending' | 'paid'>(initialTransaction?.status || 'pending');
   const [recipientId, setRecipientId] = useState(initialTransaction?.recipientId || '');
   const [receiptImageUrl, setReceiptImageUrl] = useState(initialTransaction?.receiptImageUrl || '');
+  const [feasibilityPercentage, setFeasibilityPercentage] = useState(initialTransaction?.feasibilityPercentage?.toString() || '');
   const [isUploading, setIsUploading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [transactions, setTransactions] = useState<ProjectTransaction[]>(project.transactions || []);
@@ -1110,6 +1111,8 @@ const ProjectTransactionModal: React.FC<ProjectTransactionModalProps> = ({ proje
 
     setLoading(true);
     try {
+      const feasibilityPercentageValue = feasibilityPercentage ? Number(feasibilityPercentage) : undefined;
+      
       if (isEditMode && initialTransaction) {
         // Update existing transaction
         const updatedTransaction = await projectTransactionService.update(initialTransaction.id, {
@@ -1120,7 +1123,8 @@ const ProjectTransactionModal: React.FC<ProjectTransactionModalProps> = ({ proje
           paymentDate: paymentDate ? new Date(paymentDate).toISOString() : undefined,
           status: status,
           recipientId: type === 'expense' ? recipientId : undefined,
-          receiptImageUrl: type === 'expense' && receiptImageUrl ? receiptImageUrl : undefined
+          receiptImageUrl: type === 'expense' && receiptImageUrl ? receiptImageUrl : undefined,
+          feasibilityPercentage: feasibilityPercentageValue
         });
         // Update local transactions state
         setTransactions(transactions.map(t => t.id === initialTransaction.id ? updatedTransaction : t));
@@ -1136,7 +1140,8 @@ const ProjectTransactionModal: React.FC<ProjectTransactionModalProps> = ({ proje
           paymentDate: paymentDate ? new Date(paymentDate).toISOString() : undefined,
           status: status,
           recipientId: type === 'expense' ? recipientId : undefined,
-          receiptImageUrl: type === 'expense' && receiptImageUrl ? receiptImageUrl : undefined
+          receiptImageUrl: type === 'expense' && receiptImageUrl ? receiptImageUrl : undefined,
+          feasibilityPercentage: feasibilityPercentageValue
         });
         // Update local transactions state
         setTransactions([newTransaction, ...transactions]);
@@ -1148,6 +1153,7 @@ const ProjectTransactionModal: React.FC<ProjectTransactionModalProps> = ({ proje
         setTransactionDate(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
         setRecipientId('');
         setReceiptImageUrl('');
+        setFeasibilityPercentage('');
         onTransactionAdded(newTransaction);
       }
     } catch (error: any) {
@@ -1168,121 +1174,130 @@ const ProjectTransactionModal: React.FC<ProjectTransactionModalProps> = ({ proje
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-2xl font-bold text-slate-900">{isEditMode ? 'Sửa giao dịch' : 'Thu chi dự án'}</h3>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full text-slate-500"><X size={20} /></button>
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto">
+      <div className="bg-white rounded-xl w-full max-w-2xl p-3 sm:p-5 shadow-2xl my-4">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-slate-900">{isEditMode ? 'Sửa giao dịch' : 'Thu chi'}</h3>
+          <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-full text-slate-500"><X size={18} /></button>
         </div>
-        <div className="space-y-4">
-          <div className="p-4 bg-slate-50 rounded-xl">
-            <div className="text-sm text-slate-600 mb-2">Dự án: <span className="font-semibold text-slate-900">{project.name}</span></div>
-            <div className="grid grid-cols-3 gap-3 mt-3">
+        <div className="space-y-3">
+          <div className="p-3 bg-slate-50 rounded-lg">
+            <div className="text-xs text-slate-600 mb-2">Dự án: <span className="font-semibold text-slate-900">{project.name}</span></div>
+            <div className="grid grid-cols-3 gap-2">
               <div className="text-center">
-                <div className="text-xs text-slate-500 mb-1">Tổng thu</div>
-                <div className="text-sm font-bold text-emerald-600">{formatCurrency(totalIncome)}</div>
+                <div className="text-[10px] text-slate-500 mb-0.5">Tổng thu</div>
+                <div className="text-xs font-bold text-emerald-600">{formatCurrency(totalIncome)}</div>
               </div>
               <div className="text-center">
-                <div className="text-xs text-slate-500 mb-1">Tổng chi</div>
-                <div className="text-sm font-bold text-rose-600">{formatCurrency(totalExpense)}</div>
+                <div className="text-[10px] text-slate-500 mb-0.5">Tổng chi</div>
+                <div className="text-xs font-bold text-rose-600">{formatCurrency(totalExpense)}</div>
               </div>
               <div className="text-center">
-                <div className="text-xs text-slate-500 mb-1">Số dư</div>
-                <div className={`text-sm font-bold ${balance >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>
+                <div className="text-[10px] text-slate-500 mb-0.5">Số dư</div>
+                <div className={`text-xs font-bold ${balance >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>
                   {formatCurrency(balance)}
                 </div>
               </div>
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Loại giao dịch</label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => setType('income')}
-                className={`py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
-                  type === 'income'
-                    ? 'bg-emerald-600 text-white shadow-md'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                <ArrowUpCircle size={18} />
-                Thu
-              </button>
-              <button
-                onClick={() => setType('expense')}
-                className={`py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
-                  type === 'expense'
-                    ? 'bg-rose-600 text-white shadow-md'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                <ArrowDownCircle size={18} />
-                Chi
-              </button>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1.5">Loại giao dịch</label>
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  onClick={() => setType('income')}
+                  className={`py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1 ${
+                    type === 'income'
+                      ? 'bg-emerald-600 text-white shadow-md'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  <ArrowUpCircle size={14} />
+                  Thu
+                </button>
+                <button
+                  onClick={() => setType('expense')}
+                  className={`py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1 ${
+                    type === 'expense'
+                      ? 'bg-rose-600 text-white shadow-md'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  <ArrowDownCircle size={14} />
+                  Chi
+                </button>
+              </div>
             </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Số tiền (VNĐ)</label>
-            <input
-              autoFocus
-              type="text"
-              inputMode="numeric"
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
-              placeholder="Nhập số tiền (ví dụ: 1.000.000)..."
-              value={amount}
-              onChange={handleAmountChange}
-            />
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Số tiền (VNĐ)</label>
+              <input
+                autoFocus
+                type="text"
+                inputMode="numeric"
+                className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                placeholder="Nhập số tiền..."
+                value={amount}
+                onChange={handleAmountChange}
+              />
+            </div>
           </div>
 
           {type === 'income' && (
             <>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Ngày thu</label>
-                <input
-                  type="date"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20"
-                  value={paymentDate}
-                  onChange={(e) => setPaymentDate(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Trạng thái thanh toán</label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setStatus('pending')}
-                    className={`py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
-                      status === 'pending'
-                        ? 'bg-amber-600 text-white shadow-md'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    Chờ thanh toán
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setStatus('paid')}
-                    className={`py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
-                      status === 'paid'
-                        ? 'bg-emerald-600 text-white shadow-md'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    Đã thanh toán
-                  </button>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Ngày thu</label>
+                  <input
+                    type="date"
+                    className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    value={paymentDate}
+                    onChange={(e) => setPaymentDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Trạng thái</label>
+                  <div className="grid grid-cols-2 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setStatus('pending')}
+                      className={`py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        status === 'pending'
+                          ? 'bg-amber-600 text-white'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      Chờ
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStatus('paid')}
+                      className={`py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        status === 'paid'
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      Đã TT
+                    </button>
+                  </div>
                 </div>
               </div>
-
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Thời gian tạo</label>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Phần trăm khả thi (%)</label>
                 <input
-                  type="datetime-local"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20"
-                  value={transactionDate}
-                  onChange={(e) => setTransactionDate(e.target.value)}
+                  type="number"
+                  min="0"
+                  max="100"
+                  className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  placeholder="0-100"
+                  value={feasibilityPercentage}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === '' || (Number(value) >= 0 && Number(value) <= 100)) {
+                      setFeasibilityPercentage(value);
+                    }
+                  }}
                 />
               </div>
             </>
@@ -1290,83 +1305,91 @@ const ProjectTransactionModal: React.FC<ProjectTransactionModalProps> = ({ proje
 
           {type === 'expense' && (
             <>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Ngày sẽ chi</label>
-                <input
-                  type="date"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20"
-                  value={paymentDate}
-                  onChange={(e) => setPaymentDate(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Trạng thái chi</label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setStatus('pending')}
-                    className={`py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
-                      status === 'pending'
-                        ? 'bg-amber-600 text-white shadow-md'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    Chờ chi
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setStatus('paid')}
-                    className={`py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
-                      status === 'paid'
-                        ? 'bg-rose-600 text-white shadow-md'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    Đã chi
-                  </button>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Ngày chi</label>
+                  <input
+                    type="date"
+                    className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    value={paymentDate}
+                    onChange={(e) => setPaymentDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Trạng thái</label>
+                  <div className="grid grid-cols-2 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setStatus('pending')}
+                      className={`py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        status === 'pending'
+                          ? 'bg-amber-600 text-white'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      Chờ
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStatus('paid')}
+                      className={`py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        status === 'paid'
+                          ? 'bg-rose-600 text-white'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      Đã chi
+                    </button>
+                  </div>
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Thời gian tạo</label>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Phần trăm khả thi (%)</label>
                 <input
-                  type="datetime-local"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20"
-                  value={transactionDate}
-                  onChange={(e) => setTransactionDate(e.target.value)}
+                  type="number"
+                  min="0"
+                  max="100"
+                  className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  placeholder="0-100"
+                  value={feasibilityPercentage}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === '' || (Number(value) >= 0 && Number(value) <= 100)) {
+                      setFeasibilityPercentage(value);
+                    }
+                  }}
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Người nhận <span className="text-rose-500">*</span></label>
-                <select
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20"
-                  value={recipientId}
-                  onChange={(e) => setRecipientId(e.target.value)}
-                >
-                  <option value="">-- Chọn người nhận --</option>
-                  {(() => {
-                    const grouped = employees.reduce((acc, emp) => {
-                      const dept = emp.department || 'Khác';
-                      if (!acc[dept]) acc[dept] = [];
-                      acc[dept].push(emp);
-                      return acc;
-                    }, {} as Record<string, typeof employees>);
-                    return Object.keys(grouped).sort().map(dept => (
-                      <optgroup key={dept} label={dept}>
-                        {grouped[dept].map(e => (
-                          <option key={e.id} value={e.id}>{e.fullName}</option>
-                        ))}
-                      </optgroup>
-                    ));
-                  })()}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Hóa đơn (không bắt buộc)</label>
-                <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Người nhận <span className="text-rose-500">*</span></label>
+                  <select
+                    className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    value={recipientId}
+                    onChange={(e) => setRecipientId(e.target.value)}
+                  >
+                    <option value="">-- Chọn --</option>
+                    {(() => {
+                      const grouped = employees.reduce((acc, emp) => {
+                        const dept = emp.department || 'Khác';
+                        if (!acc[dept]) acc[dept] = [];
+                        acc[dept].push(emp);
+                        return acc;
+                      }, {} as Record<string, typeof employees>);
+                      return Object.keys(grouped).sort().map(dept => (
+                        <optgroup key={dept} label={dept}>
+                          {grouped[dept].map(e => (
+                            <option key={e.id} value={e.id}>{e.fullName}</option>
+                          ))}
+                        </optgroup>
+                      ));
+                    })()}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Hóa đơn</label>
                   <input
                     type="file"
                     accept="image/*"
@@ -1377,68 +1400,68 @@ const ProjectTransactionModal: React.FC<ProjectTransactionModalProps> = ({ proje
                   />
                   <label
                     htmlFor="receipt-upload"
-                    className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-slate-300 cursor-pointer hover:border-indigo-500 hover:bg-indigo-50 transition-all ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    className={`flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg border-2 border-dashed border-slate-300 cursor-pointer hover:border-indigo-500 hover:bg-indigo-50 transition-all text-xs ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     {isUploading ? (
                       <>
-                        <Clock size={18} className="text-indigo-600 animate-spin" />
-                        <span className="text-sm text-slate-600">Đang tải...</span>
+                        <Clock size={12} className="text-indigo-600 animate-spin" />
+                        <span className="text-slate-600">Đang tải...</span>
                       </>
                     ) : receiptImageUrl ? (
                       <>
-                        <ImageIcon size={18} className="text-emerald-600" />
-                        <span className="text-sm text-emerald-600 font-medium">Đã tải ảnh</span>
+                        <ImageIcon size={12} className="text-emerald-600" />
+                        <span className="text-emerald-600 font-medium">Đã tải</span>
                       </>
                     ) : (
                       <>
-                        <Upload size={18} className="text-slate-400" />
-                        <span className="text-sm text-slate-600">Tải ảnh hóa đơn lên</span>
+                        <Upload size={12} className="text-slate-400" />
+                        <span className="text-slate-600">Tải ảnh</span>
                       </>
                     )}
                   </label>
-                  {receiptImageUrl && (
-                    <div className="relative">
-                      <img
-                        src={receiptImageUrl}
-                        alt="Hóa đơn"
-                        className="w-full h-48 object-contain rounded-xl border border-slate-200"
-                      />
-                      <button
-                        onClick={() => setReceiptImageUrl('')}
-                        className="absolute top-2 right-2 p-1.5 bg-white rounded-full shadow-md hover:bg-rose-50 text-rose-500 transition-all"
-                        title="Xóa ảnh"
-                      >
-                        <X size={16} />
-                      </button>
-                    </div>
-                  )}
                 </div>
               </div>
+              {receiptImageUrl && (
+                <div className="relative">
+                  <img
+                    src={receiptImageUrl}
+                    alt="Hóa đơn"
+                    className="w-full h-28 object-contain rounded-lg border border-slate-200"
+                  />
+                  <button
+                    onClick={() => setReceiptImageUrl('')}
+                    className="absolute top-1 right-1 p-1 bg-white rounded-full shadow-md hover:bg-rose-50 text-rose-500 transition-all"
+                    title="Xóa ảnh"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              )}
             </>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Mô tả (không bắt buộc)</label>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Mô tả (tùy chọn)</label>
             <textarea
               rows={2}
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20 resize-none"
-              placeholder="Ghi chú về giao dịch..."
+              className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20 resize-none"
+              placeholder="Ghi chú..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
           </div>
 
-          <div className="flex gap-3 mt-6">
+          <div className="flex gap-2 mt-4">
             <button
               onClick={onClose}
-              className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-semibold hover:bg-slate-200 transition-all"
+              className="flex-1 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-semibold hover:bg-slate-200 transition-all"
             >
               Hủy
             </button>
             <button
               disabled={loading || !amount || parseAmount(amount) <= 0}
               onClick={handleSubmit}
-              className={`flex-1 py-3 text-white rounded-xl font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+              className={`flex-1 py-2 text-white rounded-lg text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                 type === 'income'
                   ? 'bg-emerald-600 hover:bg-emerald-700'
                   : 'bg-rose-600 hover:bg-rose-700'
@@ -1853,6 +1876,8 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
   const [allTransactions, setAllTransactions] = useState<ProjectTransaction[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedChartDate, setSelectedChartDate] = useState<string | null>(null);
+  const [isChildTransactionModalOpen, setIsChildTransactionModalOpen] = useState(false);
+  const [parentTransaction, setParentTransaction] = useState<ProjectTransaction | null>(null);
 
   // Load all transactions (optimized - single query instead of multiple)
   useEffect(() => {
@@ -2042,6 +2067,11 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
     }
   };
 
+  const handleCreateChildTransaction = (parentTransaction: ProjectTransaction) => {
+    setParentTransaction(parentTransaction);
+    setIsChildTransactionModalOpen(true);
+  };
+
   const handleDeleteTransaction = async (transaction: ProjectTransaction) => {
     if (!confirm(`Bạn có chắc chắn muốn xóa giao dịch này?`)) {
       return;
@@ -2061,7 +2091,7 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4">
         <div className="px-4 py-3 bg-emerald-50 rounded-lg border-2 border-emerald-200">
           <div className="text-xs font-semibold text-emerald-700 uppercase mb-1">Tổng thu (đã thanh toán)</div>
           <div className="text-lg font-black text-emerald-600">{formatCurrency(totals.incomePaid)} VNĐ</div>
@@ -2085,8 +2115,8 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl border-2 border-slate-200 shadow-sm p-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 mb-3">
+      <div className="bg-white rounded-xl border-2 border-slate-200 shadow-sm p-3 sm:p-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3 mb-3">
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1">Dự án</label>
             <select
@@ -2169,7 +2199,7 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
         {/* Bộ lọc từ ngày đến ngày - Luôn hiển thị */}
         <div className="border-t border-slate-200 pt-3 mt-3">
           <label className="block text-xs font-medium text-slate-700 mb-2">Lọc theo khoảng thời gian</label>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2 sm:gap-3">
             <div className="flex-1">
               <label className="block text-xs text-slate-600 mb-1">Từ ngày</label>
               <input
@@ -2181,10 +2211,10 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
                     setDateFilter('custom');
                   }
                 }}
-                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                className="w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
               />
             </div>
-            <div className="pt-6">
+            <div className="hidden sm:block pt-6">
               <span className="text-slate-400">→</span>
             </div>
             <div className="flex-1">
@@ -2198,18 +2228,18 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
                     setDateFilter('custom');
                   }
                 }}
-                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                className="w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
               />
             </div>
             {(customDateStart || customDateEnd) && (
-              <div className="pt-6">
+              <div className="sm:pt-6">
                 <button
                   onClick={() => {
                     setCustomDateStart('');
                     setCustomDateEnd('');
                     setDateFilter('all');
                   }}
-                  className="px-3 py-2 text-xs text-slate-600 hover:text-slate-800 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+                  className="w-full sm:w-auto px-3 py-2 text-xs text-slate-600 hover:text-slate-800 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap"
                 >
                   Xóa
                 </button>
@@ -2408,6 +2438,7 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Loại</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Số tiền</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Trạng thái</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Phần trăm khả thi</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Mô tả</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Thao tác</th>
                 </tr>
@@ -2461,10 +2492,34 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
                         })()}
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-600">
+                        {transaction.feasibilityPercentage !== undefined && transaction.feasibilityPercentage !== null ? (
+                          <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                            transaction.feasibilityPercentage >= 80 
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : transaction.feasibilityPercentage >= 50
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-rose-100 text-rose-700'
+                          }`}>
+                            {transaction.feasibilityPercentage}%
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600">
                         {transaction.description || '-'}
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          {transaction.type === 'expense' && transaction.status === 'pending' && (
+                            <button
+                              onClick={() => handleCreateChildTransaction(transaction)}
+                              className="text-emerald-600 hover:text-emerald-700 text-xs font-medium"
+                              title="Tạo giao dịch con (đã chi một phần)"
+                            >
+                              Đã chi
+                            </button>
+                          )}
                           <button
                             onClick={() => handleEditTransaction(transaction)}
                             className="text-indigo-600 hover:text-indigo-700 text-xs font-medium"
@@ -2524,6 +2579,231 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
           }}
         />
       )}
+
+      {/* Child Transaction Modal */}
+      {isChildTransactionModalOpen && parentTransaction && (
+        <ChildTransactionModal
+          parentTransaction={parentTransaction}
+          project={projects.find(p => p.id === parentTransaction.projectId)!}
+          employees={employees}
+          onClose={() => {
+            setIsChildTransactionModalOpen(false);
+            setParentTransaction(null);
+          }}
+          onSuccess={(childTransaction, updatedParent) => {
+            // Update local state
+            setAllTransactions(prev => {
+              const updated = [...prev];
+              // Update parent transaction
+              const parentIndex = updated.findIndex(t => t.id === parentTransaction.id);
+              if (parentIndex >= 0) {
+                updated[parentIndex] = updatedParent;
+              }
+              // Add child transaction
+              updated.push(childTransaction);
+              // Sort by transaction date (newest first)
+              updated.sort((a, b) => new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime());
+              return updated;
+            });
+            onTransactionAdded(childTransaction);
+            setIsChildTransactionModalOpen(false);
+            setParentTransaction(null);
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+// Child Transaction Modal - Tạo giao dịch con từ giao dịch chờ chi
+interface ChildTransactionModalProps {
+  parentTransaction: ProjectTransaction;
+  project: Project;
+  employees: Employee[];
+  onClose: () => void;
+  onSuccess: (childTransaction: ProjectTransaction, updatedParent: ProjectTransaction) => void;
+}
+
+const ChildTransactionModal: React.FC<ChildTransactionModalProps> = ({ parentTransaction, project, employees, onClose, onSuccess }) => {
+  const [amount, setAmount] = useState('');
+  const [paymentDate, setPaymentDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [recipientId, setRecipientId] = useState(parentTransaction.recipientId || '');
+  const [description, setDescription] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // Format price with dots (1.000.000)
+  const formatPrice = (value: string) => {
+    const numbers = value.replace(/\D/g, '');
+    return numbers.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  };
+
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatPrice(e.target.value);
+    setAmount(formatted);
+  };
+
+  const parseAmount = (value: string): number => {
+    const numbers = value.replace(/\D/g, '');
+    return numbers ? Number(numbers) : 0;
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('vi-VN').format(amount);
+  };
+
+  const handleSubmit = async () => {
+    const childAmount = parseAmount(amount);
+    if (!childAmount || childAmount <= 0) {
+      alert('Vui lòng nhập số tiền hợp lệ');
+      return;
+    }
+
+    if (childAmount > parentTransaction.amount) {
+      alert(`Số tiền đã chi không được vượt quá số tiền chờ chi (${formatCurrency(parentTransaction.amount)} VNĐ)`);
+      return;
+    }
+
+    if (!recipientId) {
+      alert('Vui lòng chọn người nhận');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // 1. Tạo giao dịch con (đã chi)
+      const childTransaction = await projectTransactionService.create(project.id, {
+        type: 'expense',
+        amount: childAmount,
+        description: description.trim() || `Đã chi từ giao dịch ${formatCurrency(parentTransaction.amount)} VNĐ`,
+        transactionDate: new Date().toISOString(),
+        paymentDate: paymentDate ? new Date(paymentDate).toISOString() : new Date().toISOString(),
+        status: 'paid',
+        recipientId: recipientId,
+        parentTransactionId: parentTransaction.id
+      });
+
+      // 2. Cập nhật giao dịch cha (giảm số tiền)
+      const remainingAmount = parentTransaction.amount - childAmount;
+      const updatedParent = await projectTransactionService.update(parentTransaction.id, {
+        amount: remainingAmount,
+        // Nếu số tiền còn lại = 0, tự động chuyển trạng thái thành "paid" (đã chi)
+        status: remainingAmount === 0 ? 'paid' : parentTransaction.status
+      });
+
+      onSuccess(childTransaction, updatedParent);
+    } catch (error: any) {
+      console.error('Error creating child transaction:', error);
+      const errorMessage = error?.message || error?.toString() || 'Unknown error';
+      
+      // Check if it's a database column missing error
+      if (errorMessage.includes('parent_transaction_id') || errorMessage.includes('column') || errorMessage.includes('does not exist')) {
+        alert('Cột parent_transaction_id chưa có trong database. Vui lòng chạy migration SQL:\n\nALTER TABLE project_transactions ADD COLUMN parent_transaction_id UUID REFERENCES project_transactions(id);');
+      } else if (errorMessage.includes('permission') || errorMessage.includes('policy')) {
+        alert('Không có quyền truy cập. Vui lòng kiểm tra RLS policies trên Supabase.');
+      } else {
+        alert(`Không thể tạo giao dịch con: ${errorMessage}\n\nVui lòng kiểm tra Console (F12) để xem chi tiết lỗi.`);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-xl w-full max-w-md p-5 shadow-2xl">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-slate-900">Tạo giao dịch con</h3>
+          <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-full text-slate-500"><X size={18} /></button>
+        </div>
+        
+        <div className="space-y-3">
+          <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
+            <div className="text-xs text-slate-600 mb-1">Giao dịch cha: <span className="font-semibold text-slate-900">{formatCurrency(parentTransaction.amount)} VNĐ</span></div>
+            <div className="text-xs text-slate-500">Số tiền còn lại: <span className="font-semibold text-amber-700">{formatCurrency(parentTransaction.amount - parseAmount(amount))} VNĐ</span></div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Số tiền đã chi (VNĐ) <span className="text-rose-500">*</span></label>
+            <input
+              autoFocus
+              type="text"
+              inputMode="numeric"
+              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+              placeholder={`Tối đa ${formatCurrency(parentTransaction.amount)} VNĐ`}
+              value={amount}
+              onChange={handleAmountChange}
+              maxLength={20}
+            />
+            <div className="text-xs text-slate-500 mt-1">
+              Số tiền còn lại sau khi chi: <span className="font-semibold">{formatCurrency(parentTransaction.amount - parseAmount(amount))} VNĐ</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Ngày chi</label>
+              <input
+                type="date"
+                className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                value={paymentDate}
+                onChange={(e) => setPaymentDate(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Người nhận <span className="text-rose-500">*</span></label>
+              <select
+                className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                value={recipientId}
+                onChange={(e) => setRecipientId(e.target.value)}
+              >
+                <option value="">-- Chọn --</option>
+                {(() => {
+                  const grouped = employees.reduce((acc, emp) => {
+                    const dept = emp.department || 'Khác';
+                    if (!acc[dept]) acc[dept] = [];
+                    acc[dept].push(emp);
+                    return acc;
+                  }, {} as Record<string, typeof employees>);
+                  return Object.keys(grouped).sort().map(dept => (
+                    <optgroup key={dept} label={dept}>
+                      {grouped[dept].map(e => (
+                        <option key={e.id} value={e.id}>{e.fullName}</option>
+                      ))}
+                    </optgroup>
+                  ));
+                })()}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Mô tả (tùy chọn)</label>
+            <textarea
+              rows={2}
+              className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20 resize-none"
+              placeholder="Ghi chú..."
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+          </div>
+
+          <div className="flex gap-2 mt-4">
+            <button
+              onClick={onClose}
+              className="flex-1 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-semibold hover:bg-slate-200 transition-all"
+            >
+              Hủy
+            </button>
+            <button
+              disabled={loading || !amount || parseAmount(amount) <= 0 || parseAmount(amount) > parentTransaction.amount}
+              onClick={handleSubmit}
+              className="flex-1 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Đang xử lý...' : 'Xác nhận'}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

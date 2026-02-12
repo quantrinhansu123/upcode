@@ -95,6 +95,8 @@ export interface ProjectTransaction {
   recipientId?: string; // Người nhận (chỉ cho expense)
   recipient?: Employee; // Thông tin người nhận
   receiptImageUrl?: string; // URL ảnh hóa đơn (chỉ cho expense)
+  parentTransactionId?: string; // ID của giao dịch cha (nếu là giao dịch con)
+  feasibilityPercentage?: number; // Phần trăm khả thi (0-100)
   createdAt?: string;
 }
 
