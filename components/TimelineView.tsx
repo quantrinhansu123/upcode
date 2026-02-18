@@ -91,28 +91,28 @@ export const TimelineView: React.FC<TimelineViewProps> = ({ tasks, employees, pr
     const handleToday = () => setViewStartDate(addDays(new Date(), -2));
 
     return (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[700px]">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[600px] sm:h-[700px]">
             {/* Header Controls */}
-            <div className="p-4 border-b border-slate-100 bg-slate-50/50 space-y-4">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
+            <div className="p-3 sm:p-4 border-b border-slate-100 bg-slate-50/50 space-y-3 sm:space-y-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 w-full sm:w-auto">
                         {/* Time Nav */}
                         <div className="flex bg-white rounded-lg border border-slate-200 p-1 shadow-sm">
                             <button onClick={handlePrev} className="p-1.5 hover:bg-slate-100 rounded text-slate-500"><ChevronLeft size={16} /></button>
-                            <button onClick={handleToday} className="px-3 text-sm font-semibold hover:bg-slate-100 rounded text-slate-700">Hôm nay</button>
+                            <button onClick={handleToday} className="px-2 sm:px-3 text-xs sm:text-sm font-semibold hover:bg-slate-100 rounded text-slate-700">Hôm nay</button>
                             <button onClick={handleNext} className="p-1.5 hover:bg-slate-100 rounded text-slate-500"><ChevronRight size={16} /></button>
                         </div>
-                        <div className="text-sm font-medium text-slate-500 w-32">
+                        <div className="text-xs sm:text-sm font-medium text-slate-500 w-full sm:w-32">
                             {format(viewStartDate, 'MMMM yyyy', { locale: vi })}
                         </div>
 
                         {/* Project Filter */}
-                        <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm ml-4">
-                            <Filter size={14} className="text-slate-400" />
+                        <div className="flex items-center gap-2 bg-white px-2 sm:px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm w-full sm:w-auto sm:ml-4">
+                            <Filter size={14} className="text-slate-400 flex-shrink-0" />
                             <select
                                 value={selectedProjectId}
                                 onChange={(e) => setSelectedProjectId(e.target.value)}
-                                className="text-sm font-medium text-slate-700 bg-transparent outline-none border-none pr-8 cursor-pointer"
+                                className="text-xs sm:text-sm font-medium text-slate-700 bg-transparent outline-none border-none pr-8 cursor-pointer w-full"
                             >
                                 <option value="all">Tất cả dự án</option>
                                 {projects.map(p => (
@@ -123,7 +123,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({ tasks, employees, pr
                     </div>
 
                     {/* Legend */}
-                    <div className="flex gap-4 text-xs font-medium">
+                    <div className="flex flex-wrap gap-2 sm:gap-4 text-xs font-medium w-full sm:w-auto">
                         <div className="flex items-center gap-1.5 relative group cursor-help">
                             <div className="w-2 h-2 rounded-full bg-slate-400"></div> Mới tạo
                             <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition">{stats.counts.new}</span>

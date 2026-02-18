@@ -196,15 +196,15 @@ export const CoHoiChoAiView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="space-y-4 sm:space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 p-2 sm:p-0">
       {/* Hero Section */}
-      <section className="bg-[#1A2B49] text-white flex items-center min-h-[300px] rounded-xl relative overflow-hidden">
+      <section className="bg-[#1A2B49] text-white flex items-center min-h-[200px] sm:min-h-[300px] rounded-xl relative overflow-hidden">
         <div className="absolute inset-0 bg-black/50"></div>
-        <div className="w-full px-6 text-center relative z-10">
-          <h1 className="text-2xl md:text-3xl font-extrabold mb-4 text-[#EF7F1A] uppercase tracking-wide leading-tight">
+        <div className="w-full px-4 sm:px-6 py-6 sm:py-8 text-center relative z-10">
+          <h1 className="text-lg sm:text-2xl md:text-3xl font-extrabold mb-3 sm:mb-4 text-[#EF7F1A] uppercase tracking-wide leading-tight">
             Chuẩn hóa cách cá nhân hóa quy trình quản trị doanh nghiệp
           </h1>
-          <p className="text-base md:text-lg max-w-3xl mx-auto opacity-90 leading-relaxed italic">
+          <p className="text-sm sm:text-base md:text-lg max-w-3xl mx-auto opacity-90 leading-relaxed italic px-2">
             Chúng tôi xây dựng nền tảng giúp doanh nghiệp nhanh chóng số hóa và tùy biến quy trình vận hành...
           </p>
         </div>
@@ -212,9 +212,9 @@ export const CoHoiChoAiView: React.FC = () => {
 
       {/* Portfolio Section */}
       <section>
-        <div className="flex justify-between items-end mb-4 text-[#1A2B49]">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-4 gap-3 sm:gap-0 text-[#1A2B49]">
           <div>
-            <h2 className="text-xl font-bold uppercase italic">
+            <h2 className="text-lg sm:text-xl font-bold uppercase italic">
               <span className="text-[#EF7F1A]">Portfolio</span> dự án tại UPCODE
             </h2>
             <div className="h-1 w-16 bg-[#EF7F1A] mt-1"></div>
@@ -238,18 +238,18 @@ export const CoHoiChoAiView: React.FC = () => {
               });
               setShowProjectModal(true);
             }}
-            className="bg-[#1A2B49] text-white px-4 py-1.5 rounded-lg font-bold hover:bg-black transition text-xs shadow-md"
+            className="w-full sm:w-auto bg-[#1A2B49] text-white px-4 py-2 sm:py-1.5 rounded-lg font-bold hover:bg-black transition text-xs sm:text-xs shadow-md"
           >
             Thêm dự án
           </button>
         </div>
 
-        <div className="flex flex-wrap gap-2 mb-4 overflow-x-auto pb-2">
+        <div className="flex flex-wrap gap-2 mb-4 overflow-x-auto pb-2 scrollbar-hide">
           {industries.map((ind) => (
             <button
               key={ind}
               onClick={() => setActiveFilter(ind)}
-              className={`px-4 py-1.5 rounded-full text-[10px] font-bold uppercase shadow-sm transition ${
+              className={`px-3 sm:px-4 py-1.5 rounded-full text-[10px] font-bold uppercase shadow-sm transition whitespace-nowrap flex-shrink-0 ${
                 activeFilter === ind
                   ? 'bg-[#EF7F1A] text-white'
                   : 'bg-white text-[#1A2B49] border hover:border-[#EF7F1A]'
@@ -260,7 +260,7 @@ export const CoHoiChoAiView: React.FC = () => {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredProjects.map((project) => (
             <div
               key={project.id}
@@ -329,15 +329,15 @@ export const CoHoiChoAiView: React.FC = () => {
       </section>
 
       {/* Investment Section */}
-      <section className="bg-[#1A2B49] text-white rounded-xl p-6">
-        <div className="mb-6 flex justify-between items-center flex-wrap gap-4">
-          <h2 className="text-2xl font-black uppercase italic tracking-wider border-b-4 border-[#EF7F1A] pb-2 inline-block">
+      <section className="bg-[#1A2B49] text-white rounded-xl p-4 sm:p-6">
+        <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
+          <h2 className="text-xl sm:text-2xl font-black uppercase italic tracking-wider border-b-4 border-[#EF7F1A] pb-2 inline-block">
             CƠ HỘI ĐẦU TƯ
           </h2>
-          <div className="flex gap-2">
+          <div className="flex gap-2 w-full sm:w-auto">
             <button
               onClick={() => setShowChartEditor(!showChartEditor)}
-              className="bg-[#EF7F1A] text-white px-3 py-1.5 rounded-lg font-bold text-[10px] uppercase shadow-lg transition flex items-center gap-1"
+              className="w-full sm:w-auto bg-[#EF7F1A] text-white px-3 py-1.5 rounded-lg font-bold text-[10px] uppercase shadow-lg transition flex items-center justify-center gap-1"
             >
               <ChartLine size={12} />
               Sửa dữ liệu biểu đồ
@@ -346,9 +346,9 @@ export const CoHoiChoAiView: React.FC = () => {
         </div>
 
         {showChartEditor && (
-          <div className="bg-white p-4 rounded-2xl shadow-2xl mb-6 text-[#1A2B49] border-4 border-[#EF7F1A]">
+          <div className="bg-white p-3 sm:p-4 rounded-2xl shadow-2xl mb-4 sm:mb-6 text-[#1A2B49] border-4 border-[#EF7F1A]">
             <h5 className="font-black uppercase text-xs mb-3">Cập nhật số liệu tăng trưởng (2026 - 2030)</h5>
-            <div className="grid grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-3">
               {growthLabels.map((label, i) => (
                 <div key={i}>
                   <label className="text-[9px] font-bold text-gray-400 block mb-1 uppercase">
@@ -370,7 +370,7 @@ export const CoHoiChoAiView: React.FC = () => {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           <div className="space-y-4">
             <h3 className="text-[#EF7F1A] text-3xl font-black uppercase italic leading-tight">
               "ĐẦU TƯ VÀO 500% TĂNG TRƯỞNG"
@@ -378,11 +378,11 @@ export const CoHoiChoAiView: React.FC = () => {
             <h4 className="text-lg font-black text-[#EF7F1A] uppercase italic tracking-tighter border-l-4 border-[#EF7F1A] pl-3 mb-2">
               Biểu đồ tăng trưởng chiến lược
             </h4>
-            <div className="h-[180px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="h-[180px] sm:h-[200px] w-full overflow-x-auto">
+              <ResponsiveContainer width="100%" height="100%" minWidth={300}>
                 <LineChart data={lineChartData}>
-                  <XAxis dataKey="year" stroke="#EF7F1A" fontSize={12} />
-                  <YAxis stroke="#EF7F1A" fontSize={12} />
+                  <XAxis dataKey="year" stroke="#EF7F1A" fontSize={10} />
+                  <YAxis stroke="#EF7F1A" fontSize={10} />
                   <Tooltip />
                   <Line
                     type="monotone"
@@ -396,11 +396,11 @@ export const CoHoiChoAiView: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-2xl shadow-2xl space-y-4 text-left">
-            <h4 className="font-black uppercase text-xs border-b pb-3 opacity-40 text-[#1A2B49] italic">
+          <div className="bg-white p-4 sm:p-6 rounded-2xl shadow-2xl space-y-3 sm:space-y-4 text-left">
+            <h4 className="font-black uppercase text-xs border-b pb-2 sm:pb-3 opacity-40 text-[#1A2B49] italic">
               Chỉ số tài chính quan trọng
             </h4>
-            <div className="space-y-3">
+            <div className="space-y-2 sm:space-y-3">
               <div className="flex justify-between items-center border-b border-gray-100 pb-2">
                 <span className="text-xs font-bold uppercase">🌍 TAM (Tổng thị trường)</span>
                 <span className="text-[#EF7F1A] font-black text-lg">100 TR USD</span>
@@ -427,19 +427,19 @@ export const CoHoiChoAiView: React.FC = () => {
       </section>
 
       {/* Investor Section */}
-      <section className="bg-white border rounded-xl p-6">
-        <div className="mb-6 text-center">
-          <h2 className="text-2xl font-black text-[#1A2B49] uppercase italic border-b-4 border-[#EF7F1A] pb-2 inline-block">
+      <section className="bg-white border rounded-xl p-4 sm:p-6">
+        <div className="mb-4 sm:mb-6 text-center">
+          <h2 className="text-lg sm:text-2xl font-black text-[#1A2B49] uppercase italic border-b-4 border-[#EF7F1A] pb-2 inline-block">
             "Nhà đầu tư <span className="text-[#EF7F1A]">thông thái</span> là ai?"
           </h2>
         </div>
 
-        <div className="flex flex-wrap justify-center gap-2 mb-6">
+        <div className="flex flex-wrap justify-center gap-2 mb-4 sm:mb-6 overflow-x-auto pb-2 scrollbar-hide">
           {[1, 2, 3, 4, 5, 6].map((idx) => (
             <button
               key={idx}
               onClick={() => setActiveSubTab(idx)}
-              className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase border-2 border-[#EF7F1A] transition ${
+              className={`px-3 sm:px-4 py-1.5 rounded-lg text-[10px] font-black uppercase border-2 border-[#EF7F1A] transition whitespace-nowrap flex-shrink-0 ${
                 activeSubTab === idx
                   ? 'bg-[#EF7F1A] text-white'
                   : 'bg-white text-[#EF7F1A]'
@@ -603,10 +603,10 @@ export const CoHoiChoAiView: React.FC = () => {
 
       {/* Project Modal - Add/Edit */}
       {showProjectModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center rounded-t-2xl">
-              <h3 className="text-xl font-black text-[#1A2B49] uppercase">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b p-3 sm:p-4 flex justify-between items-center rounded-t-2xl z-10">
+              <h3 className="text-base sm:text-xl font-black text-[#1A2B49] uppercase pr-2">
                 {editingProject ? 'Sửa dự án' : 'Thêm dự án mới'}
               </h3>
               <button
@@ -628,13 +628,13 @@ export const CoHoiChoAiView: React.FC = () => {
                     khacbiet: ''
                   });
                 }}
-                className="text-gray-400 hover:text-gray-600"
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
               >
                 <X size={20} />
               </button>
             </div>
-            <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="p-4 sm:p-6 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-bold text-[#1A2B49] uppercase mb-1 block">Lĩnh vực</label>
                   <input
@@ -729,10 +729,10 @@ export const CoHoiChoAiView: React.FC = () => {
                   placeholder="Mô tả điểm khác biệt..."
                 />
               </div>
-              <div className="flex gap-3 pt-4">
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 pt-4">
                 <button
                   onClick={handleSaveProject}
-                  className="flex-1 bg-[#EF7F1A] text-white px-4 py-2 rounded-lg font-bold uppercase text-xs flex items-center justify-center gap-2 hover:bg-[#d66a0a] transition"
+                  className="w-full sm:flex-1 bg-[#EF7F1A] text-white px-4 py-2.5 rounded-lg font-bold uppercase text-xs flex items-center justify-center gap-2 hover:bg-[#d66a0a] transition"
                 >
                   <Save size={14} />
                   {editingProject ? 'Cập nhật' : 'Thêm mới'}
@@ -756,7 +756,7 @@ export const CoHoiChoAiView: React.FC = () => {
                       khacbiet: ''
                     });
                   }}
-                  className="px-4 py-2 border-2 border-gray-300 text-gray-600 rounded-lg font-bold uppercase text-xs hover:bg-gray-50 transition"
+                  className="w-full sm:w-auto px-4 py-2.5 border-2 border-gray-300 text-gray-600 rounded-lg font-bold uppercase text-xs hover:bg-gray-50 transition"
                 >
                   Hủy
                 </button>
@@ -768,11 +768,11 @@ export const CoHoiChoAiView: React.FC = () => {
 
       {/* Project Detail Modal */}
       {showProjectDetailModal && selectedProject && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center rounded-t-2xl">
-              <h3 className="text-xl font-black text-[#1A2B49] uppercase">Chi tiết dự án</h3>
-              <div className="flex gap-2">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b p-3 sm:p-4 flex justify-between items-center rounded-t-2xl z-10">
+              <h3 className="text-base sm:text-xl font-black text-[#1A2B49] uppercase pr-2">Chi tiết dự án</h3>
+              <div className="flex gap-2 flex-shrink-0">
                 <button
                   onClick={() => {
                     setEditingProject(selectedProject);
@@ -817,11 +817,11 @@ export const CoHoiChoAiView: React.FC = () => {
                 </button>
               </div>
             </div>
-            <div className="p-6">
-              <div className="mb-6">
-                <img src={selectedProject.banner} alt={selectedProject.name} className="w-full h-64 object-cover rounded-xl" />
+            <div className="p-4 sm:p-6">
+              <div className="mb-4 sm:mb-6">
+                <img src={selectedProject.banner} alt={selectedProject.name} className="w-full h-48 sm:h-64 object-cover rounded-xl" />
               </div>
-              <div className="grid grid-cols-2 gap-4 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4 sm:mb-6">
                 <div>
                   <p className="text-xs text-gray-500 uppercase mb-1">Lĩnh vực</p>
                   <p className="text-sm font-bold text-[#EF7F1A]">{selectedProject.industry}</p>

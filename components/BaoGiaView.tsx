@@ -234,7 +234,7 @@ export const BaoGiaView: React.FC = () => {
   }, []);
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', backgroundColor: '#e2e8f0' }}>
+    <div className="bao-gia-container" style={{ display: 'flex', height: '100vh', overflow: 'hidden', backgroundColor: '#e2e8f0' }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Montserrat:wght@400;500;600;700;800&display=swap');
         :root {
@@ -297,6 +297,12 @@ export const BaoGiaView: React.FC = () => {
         .sig-name { font-weight: 700; font-size: 14px; color: #1e293b; text-transform: uppercase; }
         .sig-role { font-size: 12px; color: #64748b; margin-top: 2px; }
         .editor-pane { width: 480px; background: white; border-left: 1px solid #cbd5e1; overflow-y: auto; display: flex; flex-direction: column; box-shadow: -5px 0 15px rgba(0,0,0,0.05); }
+        .bao-gia-container { flex-direction: row; }
+        @media (max-width: 767px) {
+          .bao-gia-container { flex-direction: column; }
+          .editor-pane { width: 100%; max-width: 100%; border-left: none; border-top: 1px solid #cbd5e1; max-height: 50vh; }
+          .preview-pane { height: 50vh; overflow-y: auto; }
+        }
         .editor-content { padding: 25px; padding-bottom: 120px; }
         .form-group { margin-bottom: 20px; background: var(--bg-editor); padding: 15px; border-radius: 8px; border: 1px solid var(--border-color); }
         .form-group h3 { font-size: 12px; text-transform: uppercase; color: #64748b; margin-bottom: 10px; font-weight: 700; }

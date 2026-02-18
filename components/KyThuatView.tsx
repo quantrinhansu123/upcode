@@ -146,109 +146,167 @@ export const KyThuatView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 p-2 sm:p-0">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800">Kỹ thuật cần có</h2>
-          <p className="text-sm text-slate-500 mt-1">Quản lý danh sách kỹ năng và yêu cầu kỹ thuật</p>
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-800">Kỹ thuật cần có</h2>
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">Quản lý danh sách kỹ năng và yêu cầu kỹ thuật</p>
         </div>
         <button
           onClick={handleAdd}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+          className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm sm:text-base"
         >
           <Plus size={18} />
           Thêm kỹ năng
         </button>
       </div>
 
-      {/* Skills Table */}
+      {/* Skills Table - Desktop, Cards - Mobile */}
       <div className="bg-white rounded-xl border-2 border-slate-200 shadow-sm overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-slate-500">
+          <div className="p-6 sm:p-8 text-center text-slate-500">
             <div className="animate-spin mx-auto mb-2 w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full"></div>
-            <p>Đang tải...</p>
+            <p className="text-sm sm:text-base">Đang tải...</p>
           </div>
         ) : skills.length === 0 ? (
-          <div className="p-8 text-center text-slate-500">
-            <p>Chưa có kỹ năng nào</p>
+          <div className="p-6 sm:p-8 text-center text-slate-500">
+            <p className="text-sm sm:text-base">Chưa có kỹ năng nào</p>
             <button
               onClick={handleAdd}
-              className="mt-4 text-indigo-600 hover:text-indigo-700 font-medium"
+              className="mt-4 text-sm sm:text-base text-indigo-600 hover:text-indigo-700 font-medium"
             >
               Thêm kỹ năng đầu tiên
             </button>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Tên Kỹ Năng</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Loại kỹ năng</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Yêu cầu</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700 uppercase">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {skills.map((skill) => (
-                  <tr key={skill.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3 text-sm font-medium text-slate-800">{skill.name}</td>
-                    <td className="px-4 py-3 text-sm text-slate-600">{skill.type}</td>
-                    <td className="px-4 py-3 text-sm text-slate-600">
-                      <div className="max-w-md">
-                        {skill.requirements && skill.requirements.length > 0 ? (
-                          <div className="flex flex-wrap gap-2">
-                            {skill.requirements.map((req, idx) => (
-                              <span
-                                key={idx}
-                                className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs ${
-                                  req.checked 
-                                    ? 'bg-green-100 text-green-700 line-through' 
-                                    : 'bg-slate-100 text-slate-700'
-                                }`}
-                              >
-                                <span className={req.checked ? 'line-through' : ''}>{req.text}</span>
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-slate-400">-</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => handleEdit(skill)}
-                          className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
-                          title="Sửa"
-                        >
-                          <Pencil size={16} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(skill.id)}
-                          className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
-                          title="Xóa"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
+          <>
+            {/* Desktop Table */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Tên Kỹ Năng</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Loại kỹ năng</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Yêu cầu</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700 uppercase">Thao tác</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {skills.map((skill) => (
+                    <tr key={skill.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-4 py-3 text-sm font-medium text-slate-800">{skill.name}</td>
+                      <td className="px-4 py-3 text-sm text-slate-600">{skill.type}</td>
+                      <td className="px-4 py-3 text-sm text-slate-600">
+                        <div className="max-w-md">
+                          {skill.requirements && skill.requirements.length > 0 ? (
+                            <div className="flex flex-wrap gap-2">
+                              {skill.requirements.map((req, idx) => (
+                                <span
+                                  key={idx}
+                                  className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs ${
+                                    req.checked 
+                                      ? 'bg-green-100 text-green-700 line-through' 
+                                      : 'bg-slate-100 text-slate-700'
+                                  }`}
+                                >
+                                  <span className={req.checked ? 'line-through' : ''}>{req.text}</span>
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleEdit(skill)}
+                            className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                            title="Sửa"
+                          >
+                            <Pencil size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(skill.id)}
+                            className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
+                            title="Xóa"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Cards */}
+            <div className="md:hidden divide-y divide-slate-200">
+              {skills.map((skill) => (
+                <div key={skill.id} className="p-4 hover:bg-slate-50 transition-colors">
+                  <div className="space-y-2 mb-3">
+                    <div>
+                      <div className="text-xs font-semibold text-slate-500 uppercase mb-1">Tên Kỹ Năng</div>
+                      <div className="text-sm font-medium text-slate-800">{skill.name}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold text-slate-500 uppercase mb-1">Loại kỹ năng</div>
+                      <div className="text-sm text-slate-600">{skill.type}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold text-slate-500 uppercase mb-1">Yêu cầu</div>
+                      {skill.requirements && skill.requirements.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {skill.requirements.map((req, idx) => (
+                            <span
+                              key={idx}
+                              className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs ${
+                                req.checked 
+                                  ? 'bg-green-100 text-green-700 line-through' 
+                                  : 'bg-slate-100 text-slate-700'
+                              }`}
+                            >
+                              <span className={req.checked ? 'line-through' : ''}>{req.text}</span>
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-slate-400">-</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
+                    <button
+                      onClick={() => handleEdit(skill)}
+                      className="p-2.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                      title="Sửa"
+                    >
+                      <Pencil size={18} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(skill.id)}
+                      className="p-2.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Xóa"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
 
       {/* Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-slate-800">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-slate-200 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between z-10">
+              <h3 className="text-base sm:text-lg font-semibold text-slate-800 pr-2">
                 {editingSkill ? 'Sửa kỹ năng' : 'Thêm kỹ năng mới'}
               </h3>
               <button
@@ -258,13 +316,13 @@ export const KyThuatView: React.FC = () => {
                   setNewRequirementText('');
                   setEditingSkill(null);
                 }}
-                className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors flex-shrink-0"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Tên Kỹ Năng <span className="text-red-500">*</span>
@@ -358,7 +416,7 @@ export const KyThuatView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 pt-4 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => {
@@ -367,13 +425,13 @@ export const KyThuatView: React.FC = () => {
                     setNewRequirementText('');
                     setEditingSkill(null);
                   }}
-                  className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                  className="w-full sm:w-auto px-4 py-2.5 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors text-sm sm:text-base"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm sm:text-base"
                 >
                   <Save size={16} />
                   {editingSkill ? 'Cập nhật' : 'Thêm mới'}
