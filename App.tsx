@@ -122,13 +122,13 @@ const StatCard: React.FC<StatCardProps> = ({ icon, label, value, color }) => {
   };
 
   return (
-    <div className="p-3 rounded-xl border bg-white shadow-sm flex items-center gap-3">
-      <div className={`p-2 rounded-lg ${colorMap[color] || 'bg-slate-50'}`}>
+    <div className="p-2 sm:p-3 rounded-xl border bg-white shadow-sm flex items-center gap-2 sm:gap-3">
+      <div className={`p-1.5 sm:p-2 rounded-lg ${colorMap[color] || 'bg-slate-50'}`}>
         {icon}
       </div>
       <div>
-        <p className="text-slate-500 text-[10px] font-medium uppercase tracking-wider">{label}</p>
-        <p className="text-xl font-bold text-slate-900">{value}</p>
+        <p className="text-slate-500 text-[9px] sm:text-[10px] font-medium uppercase tracking-wider">{label}</p>
+        <p className="text-base sm:text-lg lg:text-xl font-bold text-slate-900">{value}</p>
       </div>
     </div>
   );
@@ -2096,38 +2096,38 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4">
-        <div className="px-4 py-3 bg-emerald-50 rounded-lg border-2 border-emerald-200">
-          <div className="text-xs font-semibold text-emerald-700 uppercase mb-1">Tổng thu (đã thanh toán)</div>
-          <div className="text-lg font-black text-emerald-600">{formatCurrency(totals.incomePaid)} VNĐ</div>
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-4">
+        <div className="px-3 sm:px-4 py-2 sm:py-3 bg-emerald-50 rounded-lg border-2 border-emerald-200">
+          <div className="text-[9px] sm:text-[10px] font-semibold text-emerald-700 uppercase mb-0.5 sm:mb-1">Thu đã TT</div>
+          <div className="text-xs sm:text-sm lg:text-base font-black text-emerald-600">{formatCurrency(totals.incomePaid)} VNĐ</div>
         </div>
-        <div className="px-4 py-3 bg-amber-50 rounded-lg border-2 border-amber-200">
-          <div className="text-xs font-semibold text-amber-700 uppercase mb-1">Tổng thu (chờ thanh toán)</div>
-          <div className="text-lg font-black text-amber-600">{formatCurrency(totals.incomePending)} VNĐ</div>
+        <div className="px-3 sm:px-4 py-2 sm:py-3 bg-amber-50 rounded-lg border-2 border-amber-200">
+          <div className="text-[9px] sm:text-[10px] font-semibold text-amber-700 uppercase mb-0.5 sm:mb-1">Thu chờ TT</div>
+          <div className="text-xs sm:text-sm lg:text-base font-black text-amber-600">{formatCurrency(totals.incomePending)} VNĐ</div>
         </div>
-        <div className="px-4 py-3 bg-rose-50 rounded-lg border-2 border-rose-200">
-          <div className="text-xs font-semibold text-rose-700 uppercase mb-1">Tổng chi (đã chi)</div>
-          <div className="text-lg font-black text-rose-600">{formatCurrency(totals.expensePaid)} VNĐ</div>
+        <div className="px-3 sm:px-4 py-2 sm:py-3 bg-rose-50 rounded-lg border-2 border-rose-200">
+          <div className="text-[9px] sm:text-[10px] font-semibold text-rose-700 uppercase mb-0.5 sm:mb-1">Chi đã chi</div>
+          <div className="text-xs sm:text-sm lg:text-base font-black text-rose-600">{formatCurrency(totals.expensePaid)} VNĐ</div>
         </div>
-        <div className="px-4 py-3 bg-orange-50 rounded-lg border-2 border-orange-200">
-          <div className="text-xs font-semibold text-orange-700 uppercase mb-1">Tổng chi (chờ thanh toán)</div>
-          <div className="text-lg font-black text-orange-600">{formatCurrency(totals.expensePending)} VNĐ</div>
+        <div className="px-3 sm:px-4 py-2 sm:py-3 bg-orange-50 rounded-lg border-2 border-orange-200">
+          <div className="text-[9px] sm:text-[10px] font-semibold text-orange-700 uppercase mb-0.5 sm:mb-1">Chi chờ chi</div>
+          <div className="text-xs sm:text-sm lg:text-base font-black text-orange-600">{formatCurrency(totals.expensePending)} VNĐ</div>
         </div>
-        <div className={`px-4 py-3 rounded-lg border-2 ${totals.balance >= 0 ? 'bg-indigo-50 border-indigo-200' : 'bg-rose-50 border-rose-200'}`}>
-          <div className={`text-xs font-semibold uppercase mb-1 ${totals.balance >= 0 ? 'text-indigo-700' : 'text-rose-700'}`}>Số dư</div>
-          <div className={`text-lg font-black ${totals.balance >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>{formatCurrency(totals.balance)} VNĐ</div>
+        <div className={`px-3 sm:px-4 py-2 sm:py-3 rounded-lg border-2 ${totals.balance >= 0 ? 'bg-indigo-50 border-indigo-200' : 'bg-rose-50 border-rose-200'}`}>
+          <div className={`text-[9px] sm:text-[10px] font-semibold uppercase mb-0.5 sm:mb-1 ${totals.balance >= 0 ? 'text-indigo-700' : 'text-rose-700'}`}>Số dư</div>
+          <div className={`text-xs sm:text-sm lg:text-base font-black ${totals.balance >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>{formatCurrency(totals.balance)} VNĐ</div>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl border-2 border-slate-200 shadow-sm p-3 sm:p-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3 mb-3">
+      <div className="bg-white rounded-xl border-2 border-slate-200 shadow-sm p-2 sm:p-3 lg:p-4">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3 mb-2 sm:mb-3">
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">Dự án</label>
+            <label className="block text-[9px] sm:text-[10px] font-medium text-slate-700 mb-0.5 sm:mb-1">Dự án</label>
             <select
               value={selectedProjectId}
               onChange={(e) => setSelectedProjectId(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              className="w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
             >
               <option value="all">Tất cả dự án</option>
               {projects.map(p => (
@@ -2136,11 +2136,11 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">Loại</label>
+            <label className="block text-[9px] sm:text-[10px] font-medium text-slate-700 mb-0.5 sm:mb-1">Loại</label>
             <select
               value={transactionType}
               onChange={(e) => setTransactionType(e.target.value as 'all' | 'income' | 'expense')}
-              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              className="w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
             >
               <option value="all">Tất cả</option>
               <option value="income">Thu</option>
@@ -2148,11 +2148,11 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">Trạng thái</label>
+            <label className="block text-[9px] sm:text-[10px] font-medium text-slate-700 mb-0.5 sm:mb-1">Trạng thái</label>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as 'all' | 'pending' | 'paid' | 'overdue')}
-              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              className="w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
             >
               <option value="all">Tất cả</option>
               <option value="pending">Chờ</option>
@@ -2161,7 +2161,7 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">Thời gian</label>
+            <label className="block text-[9px] sm:text-[10px] font-medium text-slate-700 mb-0.5 sm:mb-1">Thời gian</label>
             <select
               value={dateFilter}
               onChange={(e) => {
@@ -2171,7 +2171,7 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
                   setCustomDateEnd('');
                 }
               }}
-              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              className="w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
             >
               <option value="all">Tất cả</option>
               <option value="thisMonth">Tháng này</option>
@@ -2180,21 +2180,21 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
               <option value="custom">Tùy chỉnh</option>
             </select>
           </div>
-          <div className="flex items-end gap-2">
+          <div className="flex items-end gap-1 sm:gap-2">
             {dateFilter === 'custom' && (
               <>
                 <input
                   type="date"
                   value={customDateStart}
                   onChange={(e) => setCustomDateStart(e.target.value)}
-                  className="flex-1 px-2 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  className="flex-1 px-1.5 sm:px-2 py-1.5 sm:py-2 text-xs sm:text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                 />
-                <span className="text-slate-500">-</span>
+                <span className="text-slate-500 text-xs">-</span>
                 <input
                   type="date"
                   value={customDateEnd}
                   onChange={(e) => setCustomDateEnd(e.target.value)}
-                  className="flex-1 px-2 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  className="flex-1 px-1.5 sm:px-2 py-1.5 sm:py-2 text-xs sm:text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                 />
               </>
             )}
@@ -2202,11 +2202,11 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
         </div>
         
         {/* Bộ lọc từ ngày đến ngày - Luôn hiển thị */}
-        <div className="border-t border-slate-200 pt-3 mt-3">
-          <label className="block text-xs font-medium text-slate-700 mb-2">Lọc theo khoảng thời gian</label>
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2 sm:gap-3">
-            <div className="flex-1">
-              <label className="block text-xs text-slate-600 mb-1">Từ ngày</label>
+        <div className="border-t border-slate-200 pt-2 sm:pt-3 mt-2 sm:mt-3">
+          <label className="block text-[9px] sm:text-[10px] font-medium text-slate-700 mb-1.5 sm:mb-2">Lọc theo khoảng thời gian</label>
+          <div className="grid grid-cols-2 gap-2 sm:gap-3">
+            <div>
+              <label className="block text-[9px] sm:text-[10px] text-slate-600 mb-0.5 sm:mb-1">Từ ngày</label>
               <input
                 type="date"
                 value={customDateStart}
@@ -2219,11 +2219,8 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
                 className="w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
               />
             </div>
-            <div className="hidden sm:block pt-6">
-              <span className="text-slate-400">→</span>
-            </div>
-            <div className="flex-1">
-              <label className="block text-xs text-slate-600 mb-1">Đến ngày</label>
+            <div>
+              <label className="block text-[9px] sm:text-[10px] text-slate-600 mb-0.5 sm:mb-1">Đến ngày</label>
               <input
                 type="date"
                 value={customDateEnd}
@@ -2236,21 +2233,21 @@ const ThuChiView: React.FC<ThuChiViewProps> = ({ projects, employees, onTransact
                 className="w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
               />
             </div>
-            {(customDateStart || customDateEnd) && (
-              <div className="sm:pt-6">
-                <button
-                  onClick={() => {
-                    setCustomDateStart('');
-                    setCustomDateEnd('');
-                    setDateFilter('all');
-                  }}
-                  className="w-full sm:w-auto px-3 py-2 text-xs text-slate-600 hover:text-slate-800 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap"
-                >
-                  Xóa
-                </button>
-              </div>
-            )}
           </div>
+          {(customDateStart || customDateEnd) && (
+            <div className="col-span-2 flex justify-end">
+              <button
+                onClick={() => {
+                  setCustomDateStart('');
+                  setCustomDateEnd('');
+                  setDateFilter('all');
+                }}
+                className="w-full sm:w-auto px-2 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs text-slate-600 hover:text-slate-800 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap"
+              >
+                Xóa
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -4390,73 +4387,75 @@ export default function App() {
                   : totalIncomePending;
 
                 return (
-                  <div className="flex flex-col gap-3">
-                    <div className="flex items-center gap-3 flex-wrap">
-                      {activeProject.price && activeProject.price > 0 && (
-                        <div className="px-4 py-2.5 bg-violet-50 rounded-xl border-2 border-violet-200 shadow-sm">
-                          <div className="flex flex-col items-center gap-1">
-                            <div className="flex items-center gap-1.5">
-                              <DollarSign size={16} className="text-violet-600" />
-                              <span className="text-sm font-black text-violet-700 uppercase tracking-wide">Giá dự án</span>
+                  <>
+                    <div className="flex flex-col gap-2 sm:gap-3">
+                      <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                        {activeProject.price && activeProject.price > 0 && (
+                          <div className="px-3 sm:px-4 py-2 sm:py-2.5 bg-violet-50 rounded-xl border-2 border-violet-200 shadow-sm">
+                            <div className="flex flex-col items-center gap-0.5 sm:gap-1">
+                              <div className="flex items-center gap-1 sm:gap-1.5">
+                                <DollarSign size={14} className="text-violet-600" />
+                                <span className="text-[10px] sm:text-xs font-black text-violet-700 uppercase tracking-wide">Giá dự án</span>
+                              </div>
+                              <div className="text-xs sm:text-sm font-black text-violet-600 mt-0.5">
+                                {formatCurrency(activeProject.price)} VNĐ
+                              </div>
                             </div>
-                            <div className="text-sm font-black text-violet-600 mt-0.5">
-                              {formatCurrency(activeProject.price)} VNĐ
+                          </div>
+                        )}
+                        <div className="px-3 sm:px-4 py-2 sm:py-2.5 bg-emerald-50 rounded-xl border-2 border-emerald-200 shadow-sm">
+                          <div className="flex flex-col items-center gap-0.5 sm:gap-1">
+                            <div className="flex items-center gap-1 sm:gap-1.5">
+                              <ArrowUpCircle size={14} className="text-emerald-600" />
+                              <span className="text-[10px] sm:text-xs font-black text-emerald-700 uppercase tracking-wide">Tổng thu</span>
+                            </div>
+                            <div className="text-xs sm:text-sm font-black text-emerald-600 mt-0.5">
+                              {formatCurrency(totalIncome)} VNĐ
                             </div>
                           </div>
                         </div>
-                      )}
-                    <div className="px-4 py-2.5 bg-emerald-50 rounded-xl border-2 border-emerald-200 shadow-sm">
-                      <div className="flex flex-col items-center gap-1">
-                        <div className="flex items-center gap-1.5">
-                          <ArrowUpCircle size={16} className="text-emerald-600" />
-                          <span className="text-sm font-black text-emerald-700 uppercase tracking-wide">Tổng thu</span>
-                        </div>
-                        <div className="text-sm font-black text-emerald-600 mt-0.5">
-                          {formatCurrency(totalIncome)} VNĐ
-                        </div>
-                      </div>
-                    </div>
-                    {activeProject.price && activeProject.price > 0 && (
-                      <div className={`px-4 py-2.5 rounded-xl border-2 shadow-sm ${amountToCollect > 0 ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`}>
-                        <div className="flex flex-col items-center gap-1">
-                          <div className="flex items-center gap-1.5">
-                            <DollarSign size={16} className={amountToCollect > 0 ? 'text-amber-600' : 'text-emerald-600'} />
-                            <span className={`text-sm font-black uppercase tracking-wide ${amountToCollect > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>Số tiền cần thu</span>
+                        {activeProject.price && activeProject.price > 0 && (
+                          <div className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl border-2 shadow-sm ${amountToCollect > 0 ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`}>
+                            <div className="flex flex-col items-center gap-0.5 sm:gap-1">
+                              <div className="flex items-center gap-1 sm:gap-1.5">
+                                <DollarSign size={14} className={amountToCollect > 0 ? 'text-amber-600' : 'text-emerald-600'} />
+                                <span className={`text-[10px] sm:text-xs font-black uppercase tracking-wide ${amountToCollect > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>Cần thu</span>
+                              </div>
+                              <div className={`text-xs sm:text-sm font-black mt-0.5 ${amountToCollect > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                                {formatCurrency(amountToCollect)} VNĐ
+                              </div>
+                            </div>
                           </div>
-                          <div className={`text-sm font-black mt-0.5 ${amountToCollect > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                            {formatCurrency(amountToCollect)} VNĐ
+                        )}
+                        <div className="px-3 sm:px-4 py-2 sm:py-2.5 bg-rose-50 rounded-xl border-2 border-rose-200 shadow-sm">
+                          <div className="flex flex-col items-center gap-0.5 sm:gap-1">
+                            <div className="flex items-center gap-1 sm:gap-1.5">
+                              <ArrowDownCircle size={14} className="text-rose-600" />
+                              <span className="text-[10px] sm:text-xs font-black text-rose-700 uppercase tracking-wide">Tổng chi</span>
+                            </div>
+                            <div className="text-xs sm:text-sm font-black text-rose-600 mt-0.5">
+                              {formatCurrency(totalExpense)} VNĐ
+                            </div>
+                          </div>
+                        </div>
+                        <div className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl border-2 shadow-sm ${balance >= 0 ? 'bg-indigo-50 border-indigo-200' : 'bg-rose-50 border-rose-200'}`}>
+                          <div className="flex flex-col items-center gap-0.5 sm:gap-1">
+                            <div className="flex items-center gap-1 sm:gap-1.5">
+                              <DollarSign size={14} className={balance >= 0 ? 'text-indigo-600' : 'text-rose-600'} />
+                              <span className={`text-[10px] sm:text-xs font-black uppercase tracking-wide ${balance >= 0 ? 'text-indigo-700' : 'text-rose-700'}`}>Số dư</span>
+                            </div>
+                            <div className={`text-xs sm:text-sm font-black mt-0.5 ${balance >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>
+                              {formatCurrency(balance)} VNĐ
+                            </div>
                           </div>
                         </div>
                       </div>
-                    )}
-                    <div className="px-4 py-2.5 bg-rose-50 rounded-xl border-2 border-rose-200 shadow-sm">
-                      <div className="flex flex-col items-center gap-1">
-                        <div className="flex items-center gap-1.5">
-                          <ArrowDownCircle size={16} className="text-rose-600" />
-                          <span className="text-sm font-black text-rose-700 uppercase tracking-wide">Tổng chi</span>
-                        </div>
-                        <div className="text-sm font-black text-rose-600 mt-0.5">
-                          {formatCurrency(totalExpense)} VNĐ
-                        </div>
-                      </div>
-                    </div>
-                    <div className={`px-4 py-2.5 rounded-xl border-2 shadow-sm ${balance >= 0 ? 'bg-indigo-50 border-indigo-200' : 'bg-rose-50 border-rose-200'}`}>
-                      <div className="flex flex-col items-center gap-1">
-                        <div className="flex items-center gap-1.5">
-                          <DollarSign size={16} className={balance >= 0 ? 'text-indigo-600' : 'text-rose-600'} />
-                          <span className={`text-sm font-black uppercase tracking-wide ${balance >= 0 ? 'text-indigo-700' : 'text-rose-700'}`}>Số dư</span>
-                        </div>
-                        <div className={`text-sm font-black mt-0.5 ${balance >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>
-                          {formatCurrency(balance)} VNĐ
-                        </div>
-                      </div>
-                    </div>
                       <button
                         onClick={() => {
                           setSelectedProjectForTransaction(activeProject);
                           setIsTransactionModalOpen(true);
                         }}
-                        className="px-3 py-2.5 bg-indigo-600 text-white text-xs font-black rounded-xl hover:bg-indigo-700 transition-all flex items-center gap-1.5 shadow-md"
+                        className="w-full sm:w-auto px-3 py-2 sm:py-2.5 bg-indigo-600 text-white text-[10px] sm:text-xs font-black rounded-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-1.5 shadow-md"
                       >
                         <DollarSign size={14} />
                         Thu chi
@@ -4493,7 +4492,7 @@ export default function App() {
                         )}
                       </div>
                     )}
-                  </div>
+                  </>
                 );
               })()}
             </div>
@@ -4531,12 +4530,12 @@ export default function App() {
 
         {activeView === 'dashboard' ? (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
-              <StatCard icon={<Briefcase size={18} className="text-indigo-600" />} label="Tổng công việc" value={stats.total} color="indigo" />
-              <StatCard icon={<CheckCircle2 size={18} className="text-emerald-600" />} label="Hoàn thành" value={stats.completed} color="emerald" />
-              <StatCard icon={<Clock size={18} className="text-amber-600" />} label="Đang chờ" value={stats.pending} color="amber" />
-              <StatCard icon={<AlertCircle size={18} className="text-rose-600" />} label="Trễ hạn" value={stats.overdue} color="rose" />
-              <StatCard icon={<Sparkles size={18} className="text-violet-600" />} label="Tổng giờ làm" value={stats.totalHours} color="indigo" />
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3 mb-6">
+              <StatCard icon={<Briefcase size={16} className="text-indigo-600" />} label="Tổng công việc" value={stats.total} color="indigo" />
+              <StatCard icon={<CheckCircle2 size={16} className="text-emerald-600" />} label="Hoàn thành" value={stats.completed} color="emerald" />
+              <StatCard icon={<Clock size={16} className="text-amber-600" />} label="Đang chờ" value={stats.pending} color="amber" />
+              <StatCard icon={<AlertCircle size={16} className="text-rose-600" />} label="Trễ hạn" value={stats.overdue} color="rose" />
+              <StatCard icon={<Sparkles size={16} className="text-violet-600" />} label="Tổng giờ làm" value={stats.totalHours} color="indigo" />
             </div>
 
             {/* Financial Dashboard - Chỉ hiển thị khi chọn "Tất cả dự án" */}
@@ -4549,7 +4548,7 @@ export default function App() {
                 </div>
                 
                 {/* Bộ lọc thời gian - Từ ngày tới ngày */}
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 w-full lg:w-auto">
                   <select
                     value={financialDateFilter}
                     onChange={(e) => {
@@ -4560,7 +4559,7 @@ export default function App() {
                         setCustomDateEnd('');
                       }
                     }}
-                    className="px-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    className="col-span-2 lg:col-span-1 px-2 sm:px-3 py-1.5 text-xs sm:text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                   >
                     <option value="all">Tất cả thời gian</option>
                     <option value="thisMonth">Tháng này</option>
@@ -4570,8 +4569,8 @@ export default function App() {
                   </select>
                   
                   {/* Luôn hiển thị bộ lọc từ ngày tới ngày */}
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs text-slate-600 whitespace-nowrap">Từ ngày:</label>
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    <label className="text-[9px] sm:text-[10px] text-slate-600 whitespace-nowrap">Từ ngày:</label>
                     <input
                       type="date"
                       value={customDateStart}
@@ -4581,9 +4580,11 @@ export default function App() {
                           setFinancialDateFilter('custom');
                         }
                       }}
-                      className="px-2 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      className="flex-1 px-1.5 sm:px-2 py-1.5 text-xs sm:text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                     />
-                    <label className="text-xs text-slate-600 whitespace-nowrap">Đến ngày:</label>
+                  </div>
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    <label className="text-[9px] sm:text-[10px] text-slate-600 whitespace-nowrap">Đến ngày:</label>
                     <input
                       type="date"
                       value={customDateEnd}
@@ -4593,60 +4594,60 @@ export default function App() {
                           setFinancialDateFilter('custom');
                         }
                       }}
-                      className="px-2 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      className="flex-1 px-1.5 sm:px-2 py-1.5 text-xs sm:text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                     />
                   </div>
                 </div>
               </div>
               
               {/* Financial Stats Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-                <div className="px-4 py-3 bg-violet-50 rounded-lg border-2 border-violet-200">
-                  <div className="flex items-center gap-2 mb-1">
-                    <DollarSign size={16} className="text-violet-600" />
-                    <span className="text-xs font-semibold text-violet-700 uppercase">Tổng giá trị dự án</span>
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-4 mb-6">
+                <div className="px-3 sm:px-4 py-2 sm:py-3 bg-violet-50 rounded-lg border-2 border-violet-200">
+                  <div className="flex items-center gap-1 sm:gap-2 mb-0.5 sm:mb-1">
+                    <DollarSign size={14} className="text-violet-600" />
+                    <span className="text-[9px] sm:text-[10px] font-semibold text-violet-700 uppercase">Giá trị dự án</span>
                   </div>
-                  <div className="text-lg font-black text-violet-600">
+                  <div className="text-xs sm:text-sm lg:text-base font-black text-violet-600">
                     {new Intl.NumberFormat('vi-VN').format(financialStats.totalProjectValue)} VNĐ
                   </div>
                 </div>
                 
-                <div className="px-4 py-3 bg-emerald-50 rounded-lg border-2 border-emerald-200">
-                  <div className="flex items-center gap-2 mb-1">
-                    <ArrowUpCircle size={16} className="text-emerald-600" />
-                    <span className="text-xs font-semibold text-emerald-700 uppercase">Tổng thu</span>
+                <div className="px-3 sm:px-4 py-2 sm:py-3 bg-emerald-50 rounded-lg border-2 border-emerald-200">
+                  <div className="flex items-center gap-1 sm:gap-2 mb-0.5 sm:mb-1">
+                    <ArrowUpCircle size={14} className="text-emerald-600" />
+                    <span className="text-[9px] sm:text-[10px] font-semibold text-emerald-700 uppercase">Tổng thu</span>
                   </div>
-                  <div className="text-lg font-black text-emerald-600">
+                  <div className="text-xs sm:text-sm lg:text-base font-black text-emerald-600">
                     {new Intl.NumberFormat('vi-VN').format(financialStats.totalIncome)} VNĐ
                   </div>
                 </div>
                 
-                <div className="px-4 py-3 bg-rose-50 rounded-lg border-2 border-rose-200">
-                  <div className="flex items-center gap-2 mb-1">
-                    <ArrowDownCircle size={16} className="text-rose-600" />
-                    <span className="text-xs font-semibold text-rose-700 uppercase">Tổng chi</span>
+                <div className="px-3 sm:px-4 py-2 sm:py-3 bg-rose-50 rounded-lg border-2 border-rose-200">
+                  <div className="flex items-center gap-1 sm:gap-2 mb-0.5 sm:mb-1">
+                    <ArrowDownCircle size={14} className="text-rose-600" />
+                    <span className="text-[9px] sm:text-[10px] font-semibold text-rose-700 uppercase">Tổng chi</span>
                   </div>
-                  <div className="text-lg font-black text-rose-600">
+                  <div className="text-xs sm:text-sm lg:text-base font-black text-rose-600">
                     {new Intl.NumberFormat('vi-VN').format(financialStats.totalExpense)} VNĐ
                   </div>
                 </div>
                 
-                <div className={`px-4 py-3 rounded-lg border-2 ${financialStats.totalAmountToCollect > 0 ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <DollarSign size={16} className={financialStats.totalAmountToCollect > 0 ? 'text-amber-600' : 'text-emerald-600'} />
-                    <span className={`text-xs font-semibold uppercase ${financialStats.totalAmountToCollect > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>Số tiền cần thu</span>
+                <div className={`px-3 sm:px-4 py-2 sm:py-3 rounded-lg border-2 ${financialStats.totalAmountToCollect > 0 ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`}>
+                  <div className="flex items-center gap-1 sm:gap-2 mb-0.5 sm:mb-1">
+                    <DollarSign size={14} className={financialStats.totalAmountToCollect > 0 ? 'text-amber-600' : 'text-emerald-600'} />
+                    <span className={`text-[9px] sm:text-[10px] font-semibold uppercase ${financialStats.totalAmountToCollect > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>Cần thu</span>
                   </div>
-                  <div className={`text-lg font-black ${financialStats.totalAmountToCollect > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                  <div className={`text-xs sm:text-sm lg:text-base font-black ${financialStats.totalAmountToCollect > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
                     {new Intl.NumberFormat('vi-VN').format(financialStats.totalAmountToCollect)} VNĐ
                   </div>
                 </div>
                 
-                <div className={`px-4 py-3 rounded-lg border-2 ${financialStats.totalBalance >= 0 ? 'bg-indigo-50 border-indigo-200' : 'bg-rose-50 border-rose-200'}`}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <DollarSign size={16} className={financialStats.totalBalance >= 0 ? 'text-indigo-600' : 'text-rose-600'} />
-                    <span className={`text-xs font-semibold uppercase ${financialStats.totalBalance >= 0 ? 'text-indigo-700' : 'text-rose-700'}`}>Tổng số dư</span>
+                <div className={`px-3 sm:px-4 py-2 sm:py-3 rounded-lg border-2 ${financialStats.totalBalance >= 0 ? 'bg-indigo-50 border-indigo-200' : 'bg-rose-50 border-rose-200'}`}>
+                  <div className="flex items-center gap-1 sm:gap-2 mb-0.5 sm:mb-1">
+                    <DollarSign size={14} className={financialStats.totalBalance >= 0 ? 'text-indigo-600' : 'text-rose-600'} />
+                    <span className={`text-[9px] sm:text-[10px] font-semibold uppercase ${financialStats.totalBalance >= 0 ? 'text-indigo-700' : 'text-rose-700'}`}>Tổng số dư</span>
                   </div>
-                  <div className={`text-lg font-black ${financialStats.totalBalance >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>
+                  <div className={`text-xs sm:text-sm lg:text-base font-black ${financialStats.totalBalance >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>
                     {new Intl.NumberFormat('vi-VN').format(financialStats.totalBalance)} VNĐ
                   </div>
                 </div>
@@ -4684,18 +4685,18 @@ export default function App() {
                     </div>
                     
                     {/* Status List */}
-                    <div className="space-y-3">
+                    <div className="space-y-2 sm:space-y-3">
                       {financialStats.financialStatusData.map((item, index) => (
-                        <div key={index} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
-                          <div className="flex items-center gap-3">
-                            <div className="w-4 h-4 rounded" style={{ backgroundColor: item.color }} />
-                            <span className="text-sm font-medium text-slate-700">{item.name}</span>
+                        <div key={index} className="flex items-center justify-between p-2 sm:p-3 bg-slate-50 rounded-lg border border-slate-200">
+                          <div className="flex items-center gap-2 sm:gap-3">
+                            <div className="w-3 h-3 sm:w-4 sm:h-4 rounded" style={{ backgroundColor: item.color }} />
+                            <span className="text-xs sm:text-sm font-medium text-slate-700">{item.name}</span>
                           </div>
                           <div className="text-right">
-                            <div className="text-sm font-bold text-slate-900">
+                            <div className="text-xs sm:text-sm font-bold text-slate-900">
                               {new Intl.NumberFormat('vi-VN').format(item.value)} VNĐ
                             </div>
-                            <div className="text-xs text-slate-500">
+                            <div className="text-[10px] sm:text-xs text-slate-500">
                               {item.percentage.toFixed(1)}%
                             </div>
                           </div>
