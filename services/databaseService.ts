@@ -1,6 +1,10 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { getErrorMessage, isNetworkError, retryWithBackoff } from '../utils/errorHandler';
-import type { Project, Task, Employee, TaskType, Subtask, TaskAssignee, TaskPayment, ProjectTransaction } from '../types';
+import type { Project, Task, Employee, TaskType, Subtask, TaskAssignee, TaskPayment, ProjectTransaction, Skill, RequirementItem, ProblemSolution, SolutionDetail, SolutionStep, WorkTable } from '../types';
+import { initializeSkillsTable } from './skillTableInit';
+import { initializeProblemSolutionTable } from './problemSolutionTableInit';
+import { initializeSolutionDetailTable } from './solutionDetailTableInit';
+import { initializeWorkTableTable } from './workTableTableInit';
 
 // Helper functions to convert between database and app formats
 const dbTransactionToApp = (dbTransaction: any): ProjectTransaction => ({
@@ -19,6 +23,34 @@ const dbTransactionToApp = (dbTransaction: any): ProjectTransaction => ({
     feasibilityPercentage: dbTransaction.feasibility_percentage !== null && dbTransaction.feasibility_percentage !== undefined ? Number(dbTransaction.feasibility_percentage) : undefined,
     createdAt: dbTransaction.created_at
 });
+
+const dbSkillToApp = (dbSkill: any): Skill => {
+    // Parse requirements from JSON string or array
+    let requirements: RequirementItem[] = [];
+    if (dbSkill.requirement) {
+        try {
+            if (typeof dbSkill.requirement === 'string') {
+                const parsed = JSON.parse(dbSkill.requirement);
+                requirements = Array.isArray(parsed) ? parsed : [];
+            } else if (Array.isArray(dbSkill.requirement)) {
+                requirements = dbSkill.requirement;
+            }
+        } catch (e) {
+            // Legacy: if it's a plain string, convert to array with one unchecked item
+            if (typeof dbSkill.requirement === 'string' && dbSkill.requirement.trim()) {
+                requirements = [{ text: dbSkill.requirement, checked: false }];
+            }
+        }
+    }
+    
+    return {
+        id: dbSkill.id,
+        name: dbSkill.name,
+        type: dbSkill.type,
+        requirements: requirements,
+        createdAt: dbSkill.created_at
+    };
+};
 
 const dbProjectToApp = (dbProject: any): Project => ({
     id: dbProject.id,
@@ -69,7 +101,9 @@ const dbSubtaskToApp = (dbSubtask: any): Subtask => {
         sessions: sessions, // Luôn trả về mảng, không phải undefined
         assigneeId: dbSubtask.assignee_id || undefined,
         assignee: dbSubtask.employees ? dbEmployeeToApp(dbSubtask.employees) : undefined,
-        price: dbSubtask.price ? Number(dbSubtask.price) : undefined
+        price: dbSubtask.price ? Number(dbSubtask.price) : undefined,
+        workTableId: dbSubtask.work_table_id || undefined,
+        workTable: dbSubtask.work_tables ? dbWorkTableToApp(dbSubtask.work_tables) : undefined
     };
 };
 
@@ -292,10 +326,10 @@ export const taskService = {
     // Get all tasks (full - with subtasks and sessions, slower)
     async getAll(): Promise<Task[]> {
         try {
-            // Try fetching with all relations (including employees/assignees, task_assignees with commission, and subtasks with sessions and employees)
+            // Try fetching with all relations (including employees/assignees, task_assignees with commission, and subtasks with sessions, employees, and work_tables)
             let { data, error } = await supabase
                 .from('tasks')
-                .select('*, work_sessions(*), employees(*), task_assignees(*, employees(*)), subtasks(*, subtask_work_sessions(*), employees(*))')
+                .select('*, work_sessions(*), employees(*), task_assignees(*, employees(*)), subtasks(*, subtask_work_sessions(*), employees(*), work_tables(*))')
                 .order('created_at', { ascending: false });
 
             // Fallback: If relationship fails (e.g., migration not run), fetch without employees
@@ -303,7 +337,7 @@ export const taskService = {
                 console.warn('⚠️ Fetching tasks with assignees failed. Retrying without assignees...', error.message);
                 const retry = await supabase
                     .from('tasks')
-                    .select('*, work_sessions(*), subtasks(*, subtask_work_sessions(*), employees(*))')
+                    .select('*, work_sessions(*), subtasks(*, subtask_work_sessions(*), employees(*), work_tables(*))')
                     .order('created_at', { ascending: false });
 
                 data = retry.data;
@@ -315,7 +349,7 @@ export const taskService = {
                 console.warn('⚠️ Fetching tasks with work_sessions failed. Retrying with basic fields...', error.message);
                 const basicRetry = await supabase
                     .from('tasks')
-                    .select('*, subtasks(*, subtask_work_sessions(*), employees(*))')
+                    .select('*, subtasks(*, subtask_work_sessions(*), employees(*), work_tables(*))')
                     .order('created_at', { ascending: false });
 
                 if (basicRetry.error) {
@@ -858,14 +892,15 @@ export const taskTypeService = {
 // ============ SUBTASK OPERATIONS ============
 
 export const subtaskService = {
-    // Get all subtasks for a task (with work sessions, assignee, and price)
+    // Get all subtasks for a task (with work sessions, assignee, price, and work table)
     async getByTaskId(taskId: string): Promise<Subtask[]> {
         const { data, error } = await supabase
             .from('subtasks')
             .select(`
                 *,
                 subtask_work_sessions (*),
-                employees (*)
+                employees (*),
+                work_tables (*)
             `)
             .eq('task_id', taskId)
             .order('created_at', { ascending: true });
@@ -879,7 +914,7 @@ export const subtaskService = {
     },
 
     // Create new subtask
-    async create(taskId: string, title: string, assigneeId?: string, price?: number): Promise<Subtask> {
+    async create(taskId: string, title: string, assigneeId?: string, price?: number, workTableId?: string): Promise<Subtask> {
         const { data, error } = await supabase
             .from('subtasks')
             .insert({
@@ -887,9 +922,10 @@ export const subtaskService = {
                 title: title,
                 is_completed: false,
                 assignee_id: assigneeId || null,
-                price: price || null
+                price: price || null,
+                work_table_id: workTableId || null
             })
-            .select('*, employees(*)')
+            .select('*, employees(*), work_tables(*)')
             .single();
 
         if (error) {
@@ -969,12 +1005,13 @@ export const subtaskService = {
     },
 
     // Update subtask
-    async update(id: string, updates: { title?: string; assigneeId?: string; price?: number }): Promise<Subtask> {
+    async update(id: string, updates: { title?: string; assigneeId?: string; price?: number; workTableId?: string }): Promise<Subtask> {
         return retryWithBackoff(async () => {
             const dbUpdates: any = {};
             if (updates.title !== undefined) dbUpdates.title = updates.title;
             if (updates.assigneeId !== undefined) dbUpdates.assignee_id = updates.assigneeId || null;
             if (updates.price !== undefined) dbUpdates.price = updates.price || null;
+            if (updates.workTableId !== undefined) dbUpdates.work_table_id = updates.workTableId || null;
 
             const { data, error } = await supabase
                 .from('subtasks')
@@ -983,7 +1020,8 @@ export const subtaskService = {
                 .select(`
                     *,
                     subtask_work_sessions (*),
-                    employees (*)
+                    employees (*),
+                    work_tables (*)
                 `)
                 .single();
 
@@ -1108,7 +1146,8 @@ export const subtaskService = {
             .select(`
                 *,
                 subtask_work_sessions (*),
-                employees (*)
+                employees (*),
+                work_tables (*)
             `)
             .eq('id', id)
             .single();
@@ -1119,6 +1158,45 @@ export const subtaskService = {
         }
 
         return data ? dbSubtaskToApp(data) : null;
+    },
+
+    // Get all subtasks with work tables (for review view)
+    async getAllWithWorkTables(): Promise<any[]> {
+        const { data, error } = await supabase
+            .from('subtasks')
+            .select(`
+                *,
+                subtask_work_sessions (*),
+                employees (*),
+                work_tables (*),
+                tasks (id, title, project_id)
+            `)
+            .not('work_table_id', 'is', null)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('Error fetching subtasks with work tables:', error);
+            console.error('Error details:', {
+                message: error.message,
+                code: error.code,
+                details: error.details
+            });
+            throw error;
+        }
+
+        if (!data) {
+            return [];
+        }
+
+        return data.map((item: any) => {
+            const subtask = dbSubtaskToApp(item);
+            // Add task info
+            return {
+                ...subtask,
+                taskTitle: item.tasks?.title || '',
+                projectId: item.tasks?.project_id || ''
+            };
+        });
     }
 };
 
@@ -1310,6 +1388,658 @@ export const projectTransactionService = {
 
         if (error) {
             console.error('Error deleting transaction:', error);
+            throw error;
+        }
+    }
+};
+
+// ============ SKILL OPERATIONS ============
+
+export const skillService = {
+    // Get all skills
+    async getAll(): Promise<Skill[]> {
+        const { data, error } = await supabase
+            .from('skills')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            // Nếu bảng chưa tồn tại, thử tạo tự động
+            if (error.code === '42P01') {
+                console.log('Bảng chưa tồn tại, đang thử tạo tự động...');
+                const created = await initializeSkillsTable();
+                if (created) {
+                    // Retry query sau khi tạo bảng
+                    const { data: retryData, error: retryError } = await supabase
+                        .from('skills')
+                        .select('*')
+                        .order('created_at', { ascending: false });
+                    
+                    if (retryError) {
+                        console.error('Error fetching skills after table creation:', retryError);
+                        throw retryError;
+                    }
+                    return retryData?.map(dbSkillToApp) || [];
+                }
+            }
+            console.error('Error fetching skills:', error);
+            throw error;
+        }
+
+        return data?.map(dbSkillToApp) || [];
+    },
+
+    // Create a skill
+    async create(skill: Omit<Skill, 'id' | 'createdAt'>): Promise<Skill> {
+        // Ensure table exists before inserting
+        await initializeSkillsTable();
+        
+        // Prepare requirement data - Supabase JSONB accepts both string and object
+        let requirementData: any = null;
+        if (skill.requirements && skill.requirements.length > 0) {
+            // Try sending as object first (Supabase will handle JSONB conversion)
+            requirementData = skill.requirements;
+        }
+
+        const { data, error } = await supabase
+            .from('skills')
+            .insert({
+                name: skill.name,
+                type: skill.type,
+                requirement: requirementData
+            })
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Error creating skill:', error);
+            console.error('Error details:', {
+                message: error.message,
+                details: error.details,
+                hint: error.hint,
+                code: error.code
+            });
+            throw error;
+        }
+
+        return dbSkillToApp(data);
+    },
+
+    // Update a skill
+    async update(id: string, updates: Partial<Omit<Skill, 'id' | 'createdAt'>>): Promise<Skill> {
+        const dbUpdates: any = {};
+        if (updates.name !== undefined) dbUpdates.name = updates.name;
+        if (updates.type !== undefined) dbUpdates.type = updates.type;
+        if (updates.requirements !== undefined) {
+            // Supabase JSONB accepts object directly
+            dbUpdates.requirement = updates.requirements && updates.requirements.length > 0 
+                ? updates.requirements 
+                : null;
+        }
+
+        const { data, error } = await supabase
+            .from('skills')
+            .update(dbUpdates)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Error updating skill:', error);
+            throw error;
+        }
+
+        return dbSkillToApp(data);
+    },
+
+    // Delete a skill
+    async delete(id: string): Promise<void> {
+        const { error } = await supabase
+            .from('skills')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            console.error('Error deleting skill:', error);
+            throw error;
+        }
+    }
+};
+
+// ============ PROBLEM SOLUTION OPERATIONS ============
+
+const dbSolutionDetailToApp = (dbDetail: any): SolutionDetail => {
+    // Parse advantages - có thể là JSONB object, string, hoặc null
+    let advantages: RequirementItem[] = [];
+    if (dbDetail.advantages) {
+        if (Array.isArray(dbDetail.advantages)) {
+            advantages = dbDetail.advantages;
+        } else if (typeof dbDetail.advantages === 'string') {
+            try {
+                advantages = JSON.parse(dbDetail.advantages);
+            } catch (e) {
+                console.warn('Error parsing advantages:', e);
+                advantages = [];
+            }
+        }
+    }
+
+    // Parse disadvantages - có thể là JSONB object, string, hoặc null
+    let disadvantages: RequirementItem[] = [];
+    if (dbDetail.disadvantages) {
+        if (Array.isArray(dbDetail.disadvantages)) {
+            disadvantages = dbDetail.disadvantages;
+        } else if (typeof dbDetail.disadvantages === 'string') {
+            try {
+                disadvantages = JSON.parse(dbDetail.disadvantages);
+            } catch (e) {
+                console.warn('Error parsing disadvantages:', e);
+                disadvantages = [];
+            }
+        }
+    }
+
+    // Parse steps - có thể là JSONB object, string, hoặc null
+    let steps: SolutionStep[] = [];
+    if (dbDetail.steps) {
+        if (Array.isArray(dbDetail.steps)) {
+            steps = dbDetail.steps;
+        } else if (typeof dbDetail.steps === 'string') {
+            try {
+                steps = JSON.parse(dbDetail.steps);
+            } catch (e) {
+                console.warn('Error parsing steps:', e);
+                steps = [];
+            }
+        }
+    }
+
+    return {
+        id: dbDetail.id,
+        problemSolutionId: dbDetail.problem_solution_id,
+        solution: dbDetail.solution,
+        advantages: advantages || [],
+        disadvantages: disadvantages || [],
+        steps: steps || [],
+        createdAt: dbDetail.created_at
+    };
+};
+
+const dbProblemSolutionToApp = (dbProblemSolution: any): ProblemSolution => ({
+    id: dbProblemSolution.id,
+    problem: dbProblemSolution.problem,
+    solution: dbProblemSolution.solution,
+    description: dbProblemSolution.description || undefined,
+    solutionDetails: dbProblemSolution.solution_details?.map(dbSolutionDetailToApp) || [],
+    createdAt: dbProblemSolution.created_at
+});
+
+const dbWorkTableToApp = (dbWorkTable: any): WorkTable => ({
+    id: dbWorkTable.id,
+    problem: dbWorkTable.problem,
+    solution: dbWorkTable.solution,
+    createdAt: dbWorkTable.created_at
+});
+
+export const problemSolutionService = {
+    // Get all problem solutions with solution details
+    async getAll(): Promise<ProblemSolution[]> {
+        const { data, error } = await supabase
+            .from('problem_solutions')
+            .select(`
+                *,
+                solution_details (*)
+            `)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            // Nếu bảng chưa tồn tại, thử tạo tự động
+            if (error.code === '42P01') {
+                console.log('Bảng chưa tồn tại, đang thử tạo tự động...');
+                const created = await initializeProblemSolutionTable();
+                if (created) {
+                    // Retry query sau khi tạo bảng
+                    const { data: retryData, error: retryError } = await supabase
+                        .from('problem_solutions')
+                        .select('*')
+                        .order('created_at', { ascending: false });
+                    
+                    if (retryError) {
+                        console.error('Error fetching problem solutions after table creation:', retryError);
+                        throw retryError;
+                    }
+                    return retryData?.map(dbProblemSolutionToApp) || [];
+                }
+            }
+            console.error('Error fetching problem solutions:', error);
+            throw error;
+        }
+
+        return data?.map(dbProblemSolutionToApp) || [];
+    },
+
+    // Create a problem solution
+    async create(problemSolution: Omit<ProblemSolution, 'id' | 'createdAt'>): Promise<ProblemSolution> {
+        // Ensure table exists before inserting
+        const tableCreated = await initializeProblemSolutionTable();
+        
+        // If table creation failed, try one more time before insert
+        if (!tableCreated) {
+            console.warn('Table initialization may have failed, retrying...');
+            await initializeProblemSolutionTable();
+        }
+        
+        const { data, error } = await supabase
+            .from('problem_solutions')
+            .insert({
+                problem: problemSolution.problem,
+                solution: problemSolution.solution,
+                description: problemSolution.description || null
+            })
+            .select()
+            .single();
+
+        if (error) {
+            // Nếu bảng chưa tồn tại, thử tạo lại
+            if (error.code === '42P01' || error.code === 'PGRST116' || 
+                error.message?.includes('does not exist') || 
+                error.message?.includes('404') ||
+                error.message?.includes('schema cache') ||
+                error.message?.includes('Could not find the table')) {
+                console.log('Bảng chưa tồn tại, đang thử tạo lại...');
+                const created = await initializeProblemSolutionTable();
+                if (created) {
+                    // Retry insert sau khi tạo bảng
+                    const { data: retryData, error: retryError } = await supabase
+                        .from('problem_solutions')
+                        .insert({
+                            problem: problemSolution.problem,
+                            solution: problemSolution.solution,
+                            description: problemSolution.description || null
+                        })
+                        .select()
+                        .single();
+                    
+                    if (retryError) {
+                        console.error('Error creating problem solution after table creation:', retryError);
+                        throw retryError;
+                    }
+                    return dbProblemSolutionToApp(retryData);
+                } else {
+                    // Nếu không thể tạo bảng tự động, throw error với message rõ ràng
+                    const tableError = new Error('Bảng problem_solutions chưa tồn tại. Vui lòng chạy migration_problem_solution_rpc.sql trong Supabase SQL Editor.');
+                    (tableError as any).code = 'TABLE_NOT_EXISTS';
+                    throw tableError;
+                }
+            }
+            
+            console.error('Error creating problem solution:', error);
+            console.error('Error details:', {
+                message: error.message,
+                details: error.details,
+                hint: error.hint,
+                code: error.code
+            });
+            throw error;
+        }
+
+        return dbProblemSolutionToApp(data);
+    },
+
+    // Update a problem solution
+    async update(id: string, updates: Partial<Omit<ProblemSolution, 'id' | 'createdAt'>>): Promise<ProblemSolution> {
+        const dbUpdates: any = {};
+        if (updates.problem !== undefined) dbUpdates.problem = updates.problem;
+        if (updates.solution !== undefined) dbUpdates.solution = updates.solution;
+        if (updates.description !== undefined) {
+            dbUpdates.description = updates.description && updates.description.trim() ? updates.description : null;
+        }
+
+        const { data, error } = await supabase
+            .from('problem_solutions')
+            .update(dbUpdates)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Error updating problem solution:', error);
+            console.error('Error details:', {
+                message: error.message,
+                details: error.details,
+                hint: error.hint,
+                code: error.code
+            });
+            throw error;
+        }
+
+        return dbProblemSolutionToApp(data);
+    },
+
+    // Delete a problem solution
+    async delete(id: string): Promise<void> {
+        const { error } = await supabase
+            .from('problem_solutions')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            console.error('Error deleting problem solution:', error);
+            throw error;
+        }
+    }
+};
+
+// ============ SOLUTION DETAIL OPERATIONS ============
+
+export const solutionDetailService = {
+    // Get all solution details for a problem solution
+    async getByProblemSolutionId(problemSolutionId: string): Promise<SolutionDetail[]> {
+        // Đảm bảo bảng tồn tại trước khi query
+        await initializeSolutionDetailTable();
+        
+        const { data, error } = await supabase
+            .from('solution_details')
+            .select('*')
+            .eq('problem_solution_id', problemSolutionId)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            // Nếu bảng chưa tồn tại, thử tạo tự động
+            if (error.code === '42P01') {
+                const created = await initializeSolutionDetailTable();
+                if (created) {
+                    // Retry query
+                    const { data: retryData, error: retryError } = await supabase
+                        .from('solution_details')
+                        .select('*')
+                        .eq('problem_solution_id', problemSolutionId)
+                        .order('created_at', { ascending: false });
+                    
+                    if (retryError) {
+                        console.error('Error fetching solution details after retry:', retryError);
+                        throw retryError;
+                    }
+                    return retryData?.map(dbSolutionDetailToApp) || [];
+                }
+            }
+            console.error('Error fetching solution details:', error);
+            throw error;
+        }
+
+        return data?.map(dbSolutionDetailToApp) || [];
+    },
+
+    // Create a solution detail
+    async create(solutionDetail: Omit<SolutionDetail, 'id' | 'createdAt'>): Promise<SolutionDetail> {
+        // Đảm bảo bảng tồn tại trước khi insert
+        await initializeSolutionDetailTable();
+        
+        const { data, error } = await supabase
+            .from('solution_details')
+            .insert({
+                problem_solution_id: solutionDetail.problemSolutionId,
+                solution: solutionDetail.solution,
+                advantages: solutionDetail.advantages,
+                disadvantages: solutionDetail.disadvantages,
+                steps: solutionDetail.steps || []
+            })
+            .select()
+            .single();
+
+        if (error) {
+            // Nếu bảng chưa tồn tại, thử tạo tự động
+            if (error.code === '42P01') {
+                const created = await initializeSolutionDetailTable();
+                if (created) {
+                    // Retry insert
+                    const { data: retryData, error: retryError } = await supabase
+                        .from('solution_details')
+                        .insert({
+                            problem_solution_id: solutionDetail.problemSolutionId,
+                            solution: solutionDetail.solution,
+                            advantages: solutionDetail.advantages, // JSONB
+                            disadvantages: solutionDetail.disadvantages, // JSONB
+                            steps: solutionDetail.steps || [] // JSONB
+                        })
+                        .select()
+                        .single();
+                    
+                    if (retryError) {
+                        console.error('Error creating solution detail after retry:', retryError);
+                        throw retryError;
+                    }
+                    return dbSolutionDetailToApp(retryData);
+                }
+            }
+            console.error('Error creating solution detail:', error);
+            console.error('Error details:', {
+                message: error.message,
+                details: error.details,
+                hint: error.hint,
+                code: error.code
+            });
+            throw error;
+        }
+
+        return dbSolutionDetailToApp(data);
+    },
+
+    // Update a solution detail
+    async update(id: string, updates: Partial<Omit<SolutionDetail, 'id' | 'problemSolutionId' | 'createdAt'>>): Promise<SolutionDetail> {
+        const dbUpdates: any = {};
+        if (updates.solution !== undefined) dbUpdates.solution = updates.solution;
+        if (updates.advantages !== undefined) dbUpdates.advantages = updates.advantages;
+        if (updates.disadvantages !== undefined) dbUpdates.disadvantages = updates.disadvantages;
+
+        const { data, error } = await supabase
+            .from('solution_details')
+            .update(dbUpdates)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Error updating solution detail:', error);
+            throw error;
+        }
+
+        return dbSolutionDetailToApp(data);
+    },
+
+    // Delete a solution detail
+    async delete(id: string): Promise<void> {
+        const { error } = await supabase
+            .from('solution_details')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            console.error('Error deleting solution detail:', error);
+            throw error;
+        }
+    }
+};
+
+// ============ WORK TABLE OPERATIONS ============
+
+export const workTableService = {
+    // Get all work tables
+    async getAll(): Promise<WorkTable[]> {
+        // Đảm bảo bảng tồn tại trước khi query
+        await initializeWorkTableTable();
+        
+        const { data, error } = await supabase
+            .from('work_tables')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            // Nếu bảng chưa tồn tại, thử tạo tự động
+            if (error.code === '42P01') {
+                const created = await initializeWorkTableTable();
+                if (created) {
+                    // Retry query
+                    const { data: retryData, error: retryError } = await supabase
+                        .from('work_tables')
+                        .select('*')
+                        .order('created_at', { ascending: false });
+                    
+                    if (retryError) {
+                        console.error('Error fetching work tables after retry:', retryError);
+                        throw retryError;
+                    }
+                    return retryData?.map(dbWorkTableToApp) || [];
+                }
+            }
+            console.error('Error fetching work tables:', error);
+            throw error;
+        }
+
+        return data?.map(dbWorkTableToApp) || [];
+    },
+
+    // Get all work tables with subtask info (for history view)
+    async getAllWithSubtaskInfo(): Promise<any[]> {
+        await initializeWorkTableTable();
+        
+        const { data, error } = await supabase
+            .from('work_tables')
+            .select(`
+                *,
+                subtasks (
+                    id,
+                    title,
+                    is_completed,
+                    tasks (
+                        id,
+                        title,
+                        project_id
+                    )
+                )
+            `)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            if (error.code === '42P01') {
+                const created = await initializeWorkTableTable();
+                if (created) {
+                    const { data: retryData, error: retryError } = await supabase
+                        .from('work_tables')
+                        .select(`
+                            *,
+                            subtasks (
+                                id,
+                                title,
+                                is_completed,
+                                tasks (
+                                    id,
+                                    title,
+                                    project_id
+                                )
+                            )
+                        `)
+                        .order('created_at', { ascending: false });
+                    
+                    if (retryError) {
+                        console.error('Error fetching work tables with subtask info after retry:', retryError);
+                        throw retryError;
+                    }
+                    return retryData?.map((item: any) => ({
+                        ...dbWorkTableToApp(item),
+                        subtasks: item.subtasks || []
+                    })) || [];
+                }
+            }
+            console.error('Error fetching work tables with subtask info:', error);
+            throw error;
+        }
+
+        return data?.map((item: any) => ({
+            ...dbWorkTableToApp(item),
+            subtasks: item.subtasks || []
+        })) || [];
+    },
+
+    // Create a work table
+    async create(workTable: Omit<WorkTable, 'id' | 'createdAt'>): Promise<WorkTable> {
+        // Đảm bảo bảng tồn tại trước khi insert
+        await initializeWorkTableTable();
+        
+        const { data, error } = await supabase
+            .from('work_tables')
+            .insert({
+                problem: workTable.problem,
+                solution: workTable.solution
+            })
+            .select()
+            .single();
+
+        if (error) {
+            // Nếu bảng chưa tồn tại, thử tạo tự động
+            if (error.code === '42P01') {
+                const created = await initializeWorkTableTable();
+                if (created) {
+                    // Retry insert
+                    const { data: retryData, error: retryError } = await supabase
+                        .from('work_tables')
+                        .insert({
+                            problem: workTable.problem,
+                            solution: workTable.solution
+                        })
+                        .select()
+                        .single();
+                    
+                    if (retryError) {
+                        console.error('Error creating work table after retry:', retryError);
+                        throw retryError;
+                    }
+                    return dbWorkTableToApp(retryData);
+                }
+            }
+            console.error('Error creating work table:', error);
+            console.error('Error details:', {
+                message: error.message,
+                details: error.details,
+                hint: error.hint,
+                code: error.code
+            });
+            throw error;
+        }
+
+        return dbWorkTableToApp(data);
+    },
+
+    // Update a work table
+    async update(id: string, updates: Partial<Omit<WorkTable, 'id' | 'createdAt'>>): Promise<WorkTable> {
+        const dbUpdates: any = {};
+        if (updates.problem !== undefined) dbUpdates.problem = updates.problem;
+        if (updates.solution !== undefined) dbUpdates.solution = updates.solution;
+
+        const { data, error } = await supabase
+            .from('work_tables')
+            .update(dbUpdates)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Error updating work table:', error);
+            throw error;
+        }
+
+        return dbWorkTableToApp(data);
+    },
+
+    // Delete a work table
+    async delete(id: string): Promise<void> {
+        const { error } = await supabase
+            .from('work_tables')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            console.error('Error deleting work table:', error);
             throw error;
         }
     }

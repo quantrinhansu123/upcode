@@ -23,6 +23,8 @@ export interface Subtask {
   assigneeId?: string; // Người phụ trách
   assignee?: Employee; // Thông tin người phụ trách
   price?: number; // Giá của subtask
+  workTableId?: string; // ID của bảng làm việc (vấn đề giải pháp)
+  workTable?: WorkTable; // Thông tin bảng làm việc
 }
 
 export interface TaskPayment {
@@ -108,6 +110,50 @@ export interface Project {
   price?: number; // Giá của dự án
   createdAt: string;
   transactions?: ProjectTransaction[]; // Lịch sử thu chi
+}
+
+export interface RequirementItem {
+  text: string;
+  checked: boolean;
+}
+
+export interface Skill {
+  id: string;
+  name: string; // Tên Kỹ Năng
+  type: string; // Loại kỹ năng
+  requirements: RequirementItem[]; // Yêu cầu dạng checkbox
+  createdAt?: string;
+}
+
+export interface SolutionStep {
+  stepNumber: number; // Số thứ tự bước (1, 2, 3...)
+  description: string; // Mô tả chi tiết của bước
+}
+
+export interface SolutionDetail {
+  id: string;
+  problemSolutionId: string; // ID của vấn đề giải pháp cha
+  solution: string; // Giải pháp
+  advantages: RequirementItem[]; // Ưu điểm dạng checkbox
+  disadvantages: RequirementItem[]; // Nhược điểm dạng checkbox
+  steps: SolutionStep[]; // Các bước thực hiện
+  createdAt?: string;
+}
+
+export interface ProblemSolution {
+  id: string;
+  problem: string; // Vấn đề
+  solution: string; // Giải pháp
+  description?: string; // Mô tả thêm
+  solutionDetails?: SolutionDetail[]; // Các giải pháp chi tiết
+  createdAt?: string;
+}
+
+export interface WorkTable {
+  id: string;
+  problem: string; // Vấn đề
+  solution: string; // Cách giải quyết
+  createdAt?: string;
 }
 
 export interface AppState {

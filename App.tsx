@@ -16,6 +16,7 @@ import {
   Pause,
   Users,
   Settings,
+  Wrench,
   Pencil,
   X,
   Filter,
@@ -26,7 +27,8 @@ import {
   ArrowUpCircle,
   ArrowDownCircle,
   Image as ImageIcon,
-  Upload
+  Upload,
+  Lightbulb
 } from 'lucide-react';
 import {
   BarChart,
@@ -56,6 +58,9 @@ import { TimelineView } from './components/TimelineView';
 import { DailyTaskView } from './components/DailyTaskView';
 import { CoHoiChoAiView } from './components/CoHoiChoAiView';
 import { BaoGiaView } from './components/BaoGiaView';
+import { KyThuatView } from './components/KyThuatView';
+import { VanDeGiaiPhapView } from './components/VanDeGiaiPhapView';
+import { autoInitializeAllTables } from './services/autoInitTables';
 import { isNetworkError, getErrorMessage } from './utils/errorHandler';
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
@@ -2877,7 +2882,7 @@ export default function App() {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeView, setActiveView] = useState<'dashboard' | 'employees' | 'cohoichoai' | 'thuchi'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'employees' | 'cohoichoai' | 'thuchi' | 'kythuat' | 'vandegiaiphap'>('dashboard');
   const [taskTypes, setTaskTypes] = useState<TaskType[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [isManageTypesOpen, setIsManageTypesOpen] = useState(false);
@@ -2999,6 +3004,11 @@ export default function App() {
         }
 
         console.log('✅ Initial data loaded successfully');
+        
+        // Tự động khởi tạo các bảng mới (chạy ngầm, không block)
+        autoInitializeAllTables().catch(() => {
+          // Silent fail - không ảnh hưởng đến app
+        });
       } catch (error: any) {
         console.error('❌ Error loading data from database:', error);
         setDbError(getErrorMessage(error));
@@ -3289,6 +3299,50 @@ export default function App() {
     });
     return map;
   }, [tasks]);
+
+  // Helper function to calculate total time from tasks and subtasks
+  const calculateProjectTotalTime = useCallback((projectTasks: Task[]): number => {
+    let totalMinutes = 0;
+    const now = new Date();
+
+    projectTasks.forEach(task => {
+      // Calculate from task sessions
+      if (task.sessions && task.sessions.length > 0) {
+        task.sessions.forEach(session => {
+          if (session.startedAt) {
+            if (session.endedAt) {
+              // Session đã kết thúc
+              totalMinutes += differenceInMinutes(parseISO(session.endedAt), parseISO(session.startedAt));
+            } else {
+              // Session đang chạy
+              totalMinutes += differenceInMinutes(now, parseISO(session.startedAt));
+            }
+          }
+        });
+      }
+
+      // Calculate from subtask sessions
+      if (task.subtasks && task.subtasks.length > 0) {
+        task.subtasks.forEach(subtask => {
+          if (subtask.sessions && subtask.sessions.length > 0) {
+            subtask.sessions.forEach(session => {
+              if (session.startedAt) {
+                if (session.endedAt) {
+                  // Session đã kết thúc
+                  totalMinutes += differenceInMinutes(parseISO(session.endedAt), parseISO(session.startedAt));
+                } else {
+                  // Session đang chạy
+                  totalMinutes += differenceInMinutes(now, parseISO(session.startedAt));
+                }
+              }
+            });
+          }
+        });
+      }
+    });
+
+    return totalMinutes / 60; // Convert to hours
+  }, []);
 
   // Memoize filtered projects for sidebar
   const filteredProjects = useMemo(() => {
@@ -3925,6 +3979,20 @@ export default function App() {
             <DollarSign size={16} />
             Thu chi
           </button>
+          <button
+            onClick={() => setActiveView('kythuat')}
+            className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg transition-all text-sm ${activeView === 'kythuat' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20' : 'text-slate-500 hover:bg-slate-100'}`}
+          >
+            <Wrench size={16} />
+            Kỹ thuật
+          </button>
+          <button
+            onClick={() => setActiveView('vandegiaiphap')}
+            className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg transition-all text-sm ${activeView === 'vandegiaiphap' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20' : 'text-slate-500 hover:bg-slate-100'}`}
+          >
+            <Lightbulb size={16} />
+            Vấn đề giải pháp
+          </button>
 
           <div className="h-px bg-slate-200 my-2 mx-1"></div>
 
@@ -4006,6 +4074,7 @@ export default function App() {
                     }
                     const balance = totalIncome - totalExpense;
                     const amountToCollect = p.price && p.price > 0 ? p.price - totalIncome + totalIncomePending : totalIncomePending;
+                    const totalTime = calculateProjectTotalTime(pTasks);
                     
                     return (
                       <div
@@ -4081,6 +4150,19 @@ export default function App() {
                             </div>
                             <div className="text-[10px] text-slate-500 mt-0.5">
                               {completed}/{total} công việc
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Total time */}
+                        {totalTime > 0 && (
+                          <div className="mb-2 pt-2 border-t border-slate-100">
+                            <div className="text-[10px]">
+                              <div className="text-slate-500">Tổng thời gian</div>
+                              <div className="font-semibold text-blue-600 flex items-center gap-1">
+                                <Clock size={10} />
+                                {totalTime.toFixed(1)} giờ
+                              </div>
                             </div>
                           </div>
                         )}
@@ -4177,7 +4259,7 @@ export default function App() {
           <div>
             <div className="flex items-center gap-4">
               <h2 className="text-2xl font-bold text-slate-900">
-                {activeView === 'employees' ? 'Quản lý Nhân sự' : activeView === 'cohoichoai' ? 'Cơ Hội Cho AI' : activeView === 'baogia' ? 'Báo Giá' : activeView === 'thuchi' ? 'Quản lý Thu Chi' : activeProjectId === 'all' ? 'Tổng quan Công việc' : projects.find(p => p.id === activeProjectId)?.name}
+                {activeView === 'employees' ? 'Quản lý Nhân sự' : activeView === 'cohoichoai' ? 'Cơ Hội Cho AI' : activeView === 'baogia' ? 'Báo Giá' : activeView === 'thuchi' ? 'Quản lý Thu Chi' : activeView === 'kythuat' ? 'Kỹ thuật cần có' : activeView === 'vandegiaiphap' ? 'Vấn đề giải pháp' : activeProjectId === 'all' ? 'Tổng quan Công việc' : projects.find(p => p.id === activeProjectId)?.name}
               </h2>
               {activeView === 'dashboard' && activeProjectId !== 'all' && (() => {
                 const activeProject = projects.find(p => p.id === activeProjectId);
@@ -5038,6 +5120,10 @@ export default function App() {
               }
             }}
           />
+        ) : activeView === 'kythuat' ? (
+          <KyThuatView />
+        ) : activeView === 'vandegiaiphap' ? (
+          <VanDeGiaiPhapView />
         ) : (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <EmployeeManager tasks={tasks} projects={projects} />
