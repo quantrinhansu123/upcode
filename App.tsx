@@ -3935,7 +3935,8 @@ export default function App() {
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-slate-50">
-      <aside className="w-full md:w-72 bg-white border-r border-slate-200 p-4 flex flex-col gap-6 sticky top-0 h-auto md:h-screen overflow-y-auto z-10">
+      {/* Desktop Sidebar - Hidden on mobile */}
+      <aside className="hidden md:flex md:w-72 bg-white border-r border-slate-200 p-4 flex-col gap-6 sticky top-0 h-screen overflow-y-auto z-10">
         <div className="flex items-center gap-2 mb-4">
           <div className="bg-indigo-600 p-1.5 rounded-lg text-white">
             <LayoutDashboard size={18} />
@@ -4215,7 +4216,111 @@ export default function App() {
         </nav>
       </aside>
 
-      <main className="flex-1 p-4 md:p-6 lg:p-8 max-w-6xl w-full">
+      {/* Mobile Bottom Navigation */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t-2 border-slate-200 z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] safe-area-inset-bottom">
+        <div className="flex items-center justify-around px-1 py-1.5 overflow-x-auto scrollbar-hide">
+          <button
+            onClick={() => setActiveView('dashboard')}
+            className={`flex flex-col items-center gap-1 px-2 py-1.5 rounded-xl transition-all flex-1 min-w-0 relative ${
+              activeView === 'dashboard' 
+                ? 'text-indigo-600 bg-indigo-50' 
+                : 'text-slate-500 hover:bg-slate-50'
+            }`}
+          >
+            {activeView === 'dashboard' && (
+              <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-indigo-600 rounded-full"></div>
+            )}
+            <LayoutDashboard size={18} strokeWidth={activeView === 'dashboard' ? 2.5 : 2} />
+            <span className="text-[9px] font-semibold leading-tight">Dashboard</span>
+          </button>
+          <button
+            onClick={() => setActiveView('employees')}
+            className={`flex flex-col items-center gap-1 px-2 py-1.5 rounded-xl transition-all flex-1 min-w-0 relative ${
+              activeView === 'employees' 
+                ? 'text-indigo-600 bg-indigo-50' 
+                : 'text-slate-500 hover:bg-slate-50'
+            }`}
+          >
+            {activeView === 'employees' && (
+              <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-indigo-600 rounded-full"></div>
+            )}
+            <Users size={18} strokeWidth={activeView === 'employees' ? 2.5 : 2} />
+            <span className="text-[9px] font-semibold leading-tight">Nhân sự</span>
+          </button>
+          <button
+            onClick={() => setActiveView('cohoichoai')}
+            className={`flex flex-col items-center gap-1 px-2 py-1.5 rounded-xl transition-all flex-1 min-w-0 relative ${
+              activeView === 'cohoichoai' 
+                ? 'text-indigo-600 bg-indigo-50' 
+                : 'text-slate-500 hover:bg-slate-50'
+            }`}
+          >
+            {activeView === 'cohoichoai' && (
+              <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-indigo-600 rounded-full"></div>
+            )}
+            <Briefcase size={18} strokeWidth={activeView === 'cohoichoai' ? 2.5 : 2} />
+            <span className="text-[9px] font-semibold leading-tight">Cơ hội</span>
+          </button>
+          <button
+            onClick={() => setActiveView('baogia')}
+            className={`flex flex-col items-center gap-1 px-2 py-1.5 rounded-xl transition-all flex-1 min-w-0 relative ${
+              activeView === 'baogia' 
+                ? 'text-indigo-600 bg-indigo-50' 
+                : 'text-slate-500 hover:bg-slate-50'
+            }`}
+          >
+            {activeView === 'baogia' && (
+              <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-indigo-600 rounded-full"></div>
+            )}
+            <FileText size={18} strokeWidth={activeView === 'baogia' ? 2.5 : 2} />
+            <span className="text-[9px] font-semibold leading-tight">Báo giá</span>
+          </button>
+          <button
+            onClick={() => setActiveView('thuchi')}
+            className={`flex flex-col items-center gap-1 px-2 py-1.5 rounded-xl transition-all flex-1 min-w-0 relative ${
+              activeView === 'thuchi' 
+                ? 'text-indigo-600 bg-indigo-50' 
+                : 'text-slate-500 hover:bg-slate-50'
+            }`}
+          >
+            {activeView === 'thuchi' && (
+              <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-indigo-600 rounded-full"></div>
+            )}
+            <DollarSign size={18} strokeWidth={activeView === 'thuchi' ? 2.5 : 2} />
+            <span className="text-[9px] font-semibold leading-tight">Thu chi</span>
+          </button>
+          <button
+            onClick={() => setActiveView('kythuat')}
+            className={`flex flex-col items-center gap-1 px-2 py-1.5 rounded-xl transition-all flex-1 min-w-0 relative ${
+              activeView === 'kythuat' 
+                ? 'text-indigo-600 bg-indigo-50' 
+                : 'text-slate-500 hover:bg-slate-50'
+            }`}
+          >
+            {activeView === 'kythuat' && (
+              <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-indigo-600 rounded-full"></div>
+            )}
+            <Wrench size={18} strokeWidth={activeView === 'kythuat' ? 2.5 : 2} />
+            <span className="text-[9px] font-semibold leading-tight">Kỹ thuật</span>
+          </button>
+          <button
+            onClick={() => setActiveView('vandegiaiphap')}
+            className={`flex flex-col items-center gap-1 px-2 py-1.5 rounded-xl transition-all flex-1 min-w-0 relative ${
+              activeView === 'vandegiaiphap' 
+                ? 'text-indigo-600 bg-indigo-50' 
+                : 'text-slate-500 hover:bg-slate-50'
+            }`}
+          >
+            {activeView === 'vandegiaiphap' && (
+              <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-indigo-600 rounded-full"></div>
+            )}
+            <Lightbulb size={18} strokeWidth={activeView === 'vandegiaiphap' ? 2.5 : 2} />
+            <span className="text-[9px] font-semibold leading-tight">Giải pháp</span>
+          </button>
+        </div>
+      </nav>
+
+      <main className="flex-1 p-4 md:p-6 lg:p-8 max-w-6xl w-full pb-20 md:pb-4">
         {/* Error Banner */}
         {dbError && (
           <div className={`mb-4 p-4 border rounded-lg flex items-center justify-between ${
